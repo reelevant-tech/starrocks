@@ -18,10 +18,12 @@ import com.starrocks.common.Config;
 import com.starrocks.planner.MetaScanNode;
 import com.starrocks.planner.ScanNode;
 import com.starrocks.qe.DefaultCoordinator;
+import com.starrocks.qe.SimpleScheduler;
 import com.starrocks.qe.scheduler.dag.ExecutionFragment;
 import com.starrocks.qe.scheduler.dag.FragmentInstance;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.plan.ExecPlan;
+import com.starrocks.system.Backend;
 import com.starrocks.thrift.TScanRangeLocation;
 import com.starrocks.thrift.TScanRangeLocations;
 import com.starrocks.utframe.UtFrameUtils;
@@ -187,6 +189,48 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
         connectContext.getSessionVariable().setPreferReplicaLocation("dc:c");
         for (int i = 0; i < RUNS; i++) {
             Assertions.assertTrue(ALL_BACKENDS.containsAll(allWorkers(scheduledWorkers(SHUFFLE_AGG))));
+        }
+    }
+
+    @Test
+    public void testDeadPreferredLocationFallsBackToOtherReplicas() throws Exception {
+        Backend backend = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackend(BACKEND1_ID);
+        backend.setAlive(false);
+        try {
+            // The only backend of dc:a is down: read the other replicas instead of failing the query.
+            connectContext.getSessionVariable().setPreferReplicaLocation("dc:a");
+            Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
+            for (String sql : List.of(COUNT, SHUFFLE_AGG)) {
+                for (int i = 0; i < RUNS; i++) {
+                    Map<String, Set<Long>> workers = scheduledWorkers(sql);
+                    Assertions.assertTrue(LOCATION_B.containsAll(allWorkers(workers)), sql + ", workers: " + workers);
+                }
+            }
+        } finally {
+            backend.setAlive(true);
+        }
+    }
+
+    @Test
+    public void testDeadBackendIsLeftOutOfPreferredLocation() throws Exception {
+        Backend backend = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackend(BACKEND2_ID);
+        backend.setAlive(false);
+        try {
+            connectContext.getSessionVariable().setPreferReplicaLocation("dc:b");
+            Assertions.assertEquals(Set.of(BACKEND3_ID), scanCandidates(SCAN));
+        } finally {
+            backend.setAlive(true);
+        }
+    }
+
+    @Test
+    public void testBlocklistedPreferredLocationFallsBackToOtherReplicas() throws Exception {
+        SimpleScheduler.addToBlocklist(BACKEND1_ID);
+        try {
+            connectContext.getSessionVariable().setPreferReplicaLocation("dc:a");
+            Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
+        } finally {
+            SimpleScheduler.getHostBlacklist().clear();
         }
     }
 }

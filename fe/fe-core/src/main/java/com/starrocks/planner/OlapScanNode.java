@@ -79,6 +79,7 @@ import com.starrocks.persist.ColumnIdExpr;
 import com.starrocks.planner.expression.ExprToThrift;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
+import com.starrocks.qe.scheduler.DefaultWorkerProvider;
 import com.starrocks.rowstore.RowStoreUtils;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.RunMode;
@@ -95,7 +96,9 @@ import com.starrocks.sql.ast.expression.SlotRef;
 import com.starrocks.sql.ast.expression.StringLiteral;
 import com.starrocks.sql.common.MetaUtils;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
+import com.starrocks.system.Backend;
 import com.starrocks.system.ComputeNode;
+import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.TInternalScanRange;
@@ -790,14 +793,20 @@ public class OlapScanNode extends AbstractOlapTableScanNode {
     }
 
     /**
-     * @return the replicas on backends in the preferred locations, or all the replicas when none of them is there
+     * @return the replicas on available backends (alive, not in the blocklist) in the preferred locations, or all the
+     * replicas when none of them is there, so that a dead backend in the location falls back to the other replicas
      */
     static List<Replica> preferReplicasInLocation(List<Replica> replicas, Multimap<String, String> preferLocation) {
         if (preferLocation == null) {
             return replicas;
         }
+        SystemInfoService systemInfo = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
         List<Replica> preferredReplicas = replicas.stream()
-                .filter(replica -> TabletChecker.isLocationMatch(replica.getBackendId(), preferLocation))
+                .filter(replica -> {
+                    Backend backend = systemInfo.getBackend(replica.getBackendId());
+                    return backend != null && DefaultWorkerProvider.isWorkerAvailable(backend) &&
+                            TabletChecker.isLocationMatch(replica.getBackendId(), preferLocation);
+                })
                 .collect(Collectors.toList());
         return preferredReplicas.isEmpty() ? replicas : preferredReplicas;
     }
