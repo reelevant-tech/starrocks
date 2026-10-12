@@ -40,6 +40,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -52,6 +53,7 @@ import com.starrocks.common.FeConstants;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.CompressionUtils;
+import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.ConnectorSinkShuffleMode;
 import com.starrocks.connector.ConnectorSinkSortScope;
@@ -470,6 +472,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_QUERY_TABLET_AFFINITY = "enable_query_tablet_affinity";
     public static final String ENABLE_GATHER_FRAGMENT_LOCALITY_OPTIMIZATION = "enable_gather_fragment_locality_optimization";
+    public static final String PREFER_REPLICA_LOCATION = "prefer_replica_location";
 
     public static final String SKIP_LOCAL_DISK_CACHE = "skip_local_disk_cache";
 
@@ -1398,6 +1401,15 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
      */
     @VariableMgr.VarAttr(name = ENABLE_GATHER_FRAGMENT_LOCALITY_OPTIMIZATION)
     private boolean enableGatherFragmentLocalityOptimization = false;
+
+    /**
+     * Location labels (same format as the table property labels.location, e.g. "dc:dc1") whose
+     * backends are preferred for scans and for the gather fragment. Replicas outside these locations
+     * are only read when a tablet has no queryable replica inside them. Empty means the Frontend
+     * config default_prefer_replica_location.
+     */
+    @VariableMgr.VarAttr(name = PREFER_REPLICA_LOCATION)
+    private String preferReplicaLocation = "";
 
     @VariableMgr.VarAttr(name = SKIP_LOCAL_DISK_CACHE)
     private boolean skipLocalDiskCache = false;
@@ -4072,6 +4084,26 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isEnableGatherFragmentLocalityOptimization() {
         return enableGatherFragmentLocalityOptimization;
+    }
+
+    public String getPreferReplicaLocation() {
+        return Strings.isNullOrEmpty(preferReplicaLocation) ? Config.default_prefer_replica_location : preferReplicaLocation;
+    }
+
+    public void setPreferReplicaLocation(String preferReplicaLocation) {
+        this.preferReplicaLocation = preferReplicaLocation;
+    }
+
+    /**
+     * @return the preferred locations as a key -> values map, or null when none is set or the value is malformed
+     */
+    public Multimap<String, String> getPreferReplicaLocationMap() {
+        String location = getPreferReplicaLocation();
+        if (Strings.isNullOrEmpty(location) ||
+                !location.matches(PropertyAnalyzer.MULTI_LOCATION_LABELS_REGEX)) {
+            return null;
+        }
+        return PropertyAnalyzer.analyzeLocationStringToMap(location);
     }
 
     public boolean isSkipLocalDiskCache() {

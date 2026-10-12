@@ -1406,6 +1406,13 @@ MySQL JDBC バージョン 8.0.16 以降との互換性のために使用され�
 * **データ型**: Double
 * **スコープ**: Session
 
+### prefer_replica_location
+
+* **説明**: 共有なしクラスタでクエリの実行に優先して使用する BE の Location です。形式はテーブルプロパティ `labels.location` と同じで、例えば `dc:dc1` や `dc:dc1,dc:dc2` のように指定します。各 Tablet について、`labels.location` が一致する BE 上のレプリカのみがスキャン候補となり、Gather Fragment も一致する BE に配置されます。これらの Location にクエリ可能なレプリカがない Tablet は、他のレプリカから読み取られます。クラスタの BE が複数のデータセンターにまたがり、各データセンターがレプリカを 1 つ保持している場合に、クエリを 1 つのデータセンター内に保つことができます。中間 Fragment がスキャンの BE に従うのは、`choose_execute_instances_mode` が `LOCALITY`（デフォルト）かつ `prefer_compute_node` が `false`（デフォルト）の場合のみです。空の値は、クエリを計画する FE の設定項目 `default_prefer_replica_location` の値を意味します。
+* **デフォルト**: 空文字列
+* **データ型**: String
+* **導入バージョン**: v4.2
+
 ### query_cache_agg_cardinality_limit
 
 * **説明**: Query Cache における GROUP BY の基数の上限。GROUP BY によって生成される行がこの値を超える場合、Query Cache は有効になりません。デフォルト値: 5000000。`query_cache_entry_max_bytes` または `query_cache_entry_max_rows` が 0 に設定されている場合、関与するタブレットから計算結果が生成されていない場合でもパススルーモードが使用されます。

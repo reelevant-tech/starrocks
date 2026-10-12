@@ -41,6 +41,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.starrocks.catalog.Column;
@@ -62,6 +63,7 @@ import com.starrocks.catalog.PhysicalPartition;
 import com.starrocks.catalog.RangePartitionInfo;
 import com.starrocks.catalog.Replica;
 import com.starrocks.catalog.Tablet;
+import com.starrocks.clone.TabletChecker;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
@@ -626,6 +628,7 @@ public class OlapScanNode extends AbstractOlapTableScanNode {
                 ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableQueryTabletAffinity();
         boolean skipDiskCache = ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isSkipLocalDiskCache();
         boolean skipPageCache = ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isSkipPageCache();
+        Multimap<String, String> preferLocation = getPreferReplicaLocation();
         int logNum = 0;
         int schemaHash = olapTable.getSchemaHashByIndexMetaId(index.getMetaId());
         String schemaHashStr = String.valueOf(schemaHash);
@@ -724,6 +727,8 @@ public class OlapScanNode extends AbstractOlapTableScanNode {
                 }
             }
 
+            replicas = preferReplicasInLocation(replicas, preferLocation);
+
             // TODO: Implement a more robust strategy for tablet affinity.
             if (!enableQueryTabletAffinity) {
                 Collections.shuffle(replicas);
@@ -770,6 +775,31 @@ public class OlapScanNode extends AbstractOlapTableScanNode {
 
             result.add(scanRangeLocations);
         }
+    }
+
+    /**
+     * @return the locations of the session variable prefer_replica_location, or null when none is set or in
+     * shared-data mode, where compute nodes have no location
+     */
+    static Multimap<String, String> getPreferReplicaLocation() {
+        ConnectContext ctx = ConnectContext.get();
+        if (ctx == null || RunMode.isSharedDataMode()) {
+            return null;
+        }
+        return ctx.getSessionVariable().getPreferReplicaLocationMap();
+    }
+
+    /**
+     * @return the replicas on backends in the preferred locations, or all the replicas when none of them is there
+     */
+    static List<Replica> preferReplicasInLocation(List<Replica> replicas, Multimap<String, String> preferLocation) {
+        if (preferLocation == null) {
+            return replicas;
+        }
+        List<Replica> preferredReplicas = replicas.stream()
+                .filter(replica -> TabletChecker.isLocationMatch(replica.getBackendId(), preferLocation))
+                .collect(Collectors.toList());
+        return preferredReplicas.isEmpty() ? replicas : preferredReplicas;
     }
 
     // Estimate the memory footprint of a TScanRange, and cache it for future usage

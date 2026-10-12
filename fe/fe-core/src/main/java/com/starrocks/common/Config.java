@@ -3174,6 +3174,15 @@ public class Config extends ConfigBase {
     public static boolean enable_local_replica_selection = false;
 
     /**
+     * Default value of the session variable prefer_replica_location for queries planned by this Frontend,
+     * used when the session does not set it. Same format as the table property labels.location,
+     * for example "dc:dc1". Set a different value on each Frontend so that clients connected to the
+     * Frontend of their data center read the replicas of that data center.
+     */
+    @ConfField(mutable = true, comment = "Default prefer_replica_location for queries planned by this FE")
+    public static String default_prefer_replica_location = "";
+
+    /**
      * This will limit the max recursion depth of hash distribution pruner.
      * eg: where `a` in (5 elements) and `b` in (4 elements) and `c` in (3 elements) and `d` in (2 elements).
      * a/b/c/d are distribution columns, so the recursion depth will be 5 * 4 * 3 * 2 = 120, larger than 100,
