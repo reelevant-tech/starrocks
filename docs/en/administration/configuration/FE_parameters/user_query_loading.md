@@ -284,6 +284,15 @@ Starting from version 3.3.0, the system defaults to refreshing one partition at 
 - Description: Whether to refresh an asynchronous materialized view immediately after creation. When this item is set to `true`, newly created materialized view will be refreshed immediately.
 - Introduced in: v3.2.3
 
+### `default_prefer_replica_location`
+
+- Default: Empty string
+- Type: String
+- Unit: -
+- Is mutable: Yes
+- Description: The default value of the session variable `prefer_replica_location` for the queries planned by this FE, used when the session does not set it. It has the same format as the table property `labels.location`, for example `dc:dc1`. Set a different value on each FE so that the clients connected to the FE of their data center read the replicas in that data center. An empty value means that no location is preferred.
+- Introduced in: v4.2
+
 ### `dynamic_partition_check_interval_seconds`
 
 - Default: 600

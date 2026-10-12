@@ -1453,6 +1453,13 @@ FROM test;
 * **数据类型**：Double
 * **作用域**：Session
 
+### prefer_replica_location
+
+* **描述**：存算一体集群中优先用于执行查询的 BE 所在的 Location，格式与表属性 `labels.location` 相同，例如 `dc:dc1` 或 `dc:dc1,dc:dc2`。对于每个 Tablet，只有位于 `labels.location` 匹配的 BE 上的副本会作为扫描候选，Gather Fragment 也会被调度到匹配的 BE 上。如果某个 Tablet 在这些 Location 中没有可查询的副本，则从其他副本读取。当集群的 BE 分布在多个数据中心且每个数据中心都持有一份副本时，该变量可以让查询保持在同一个数据中心内。仅当 `choose_execute_instances_mode` 为 `LOCALITY`（默认值）且 `prefer_compute_node` 为 `false`（默认值）时，中间 Fragment 才会跟随扫描所在的 BE。空值表示使用规划该查询的 FE 的配置项 `default_prefer_replica_location` 的值。
+* **默认值**：空字符串
+* **数据类型**：String
+* **引入版本**：v4.2
+
 ### query_cache_agg_cardinality_limit
 
 * 描述：GROUP BY 聚合的高基数上限。GROUP BY 聚合的输出预估超过该行数, 则不启用 cache。
