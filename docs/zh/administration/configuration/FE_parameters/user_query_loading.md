@@ -219,6 +219,15 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - 描述: 是否在创建后立即刷新异步物化视图。当此项设置为 `true` 时，新创建的物化视图将立即刷新。
 - 引入版本: v3.2.3
 
+### `default_prefer_replica_location`
+
+- 默认值: 空字符串
+- 类型: String
+- 单位: -
+- 是否可变: Yes
+- 描述: 当会话未设置会话变量 `prefer_replica_location` 时，由该 FE 规划的查询所使用的默认值。格式与表属性 `labels.location` 相同，例如 `dc:dc1`。可以在每个 FE 上设置不同的值，使连接到其所在数据中心 FE 的客户端读取该数据中心内的副本。空值表示不优先选择任何 Location。
+- 引入版本: v4.2
+
 ### `dynamic_partition_check_interval_seconds`
 
 - 默认值: 600

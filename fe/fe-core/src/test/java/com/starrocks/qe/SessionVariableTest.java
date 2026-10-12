@@ -13,12 +13,15 @@
 // limitations under the License.
 package com.starrocks.qe;
 
+import com.google.common.collect.Multimap;
+import com.starrocks.common.Config;
 import com.starrocks.thrift.TBinaryEncodingFormat;
 import com.starrocks.thrift.TBinaryEncodingLevel;
 import com.starrocks.thrift.TQueryOptions;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 public class SessionVariableTest {
@@ -65,6 +68,31 @@ public class SessionVariableTest {
         } catch (Exception e) {
             Assertions.assertTrue(e.getMessage().contains("Legal values of choose_execute_instances_mode are"),
                     e.getMessage());
+        }
+    }
+
+    @Test
+    public void testPreferReplicaLocation() {
+        String defaultLocation = Config.default_prefer_replica_location;
+        try {
+            SessionVariable sessionVariable = new SessionVariable();
+            Assertions.assertEquals("", sessionVariable.getPreferReplicaLocation());
+            Assertions.assertNull(sessionVariable.getPreferReplicaLocationMap());
+
+            Config.default_prefer_replica_location = "dc:dc1";
+            Assertions.assertEquals("dc:dc1", sessionVariable.getPreferReplicaLocation());
+            Assertions.assertEquals(List.of("dc1"), List.copyOf(sessionVariable.getPreferReplicaLocationMap().get("dc")));
+
+            sessionVariable.setPreferReplicaLocation("dc:dc2, rack:r1");
+            Multimap<String, String> location = sessionVariable.getPreferReplicaLocationMap();
+            Assertions.assertEquals(List.of("dc2"), List.copyOf(location.get("dc")));
+            Assertions.assertEquals(List.of("r1"), List.copyOf(location.get("rack")));
+
+            sessionVariable.setPreferReplicaLocation("");
+            Config.default_prefer_replica_location = "not a location";
+            Assertions.assertNull(sessionVariable.getPreferReplicaLocationMap());
+        } finally {
+            Config.default_prefer_replica_location = defaultLocation;
         }
     }
 

@@ -210,6 +210,15 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - 説明：非同期マテリアライズドビューの作成後すぐに更新するかどうか。この項目が `true` に設定されている場合、新しく作成されたマテリアライズドビューはすぐに更新されます。
 - 導入時期：v3.2.3
 
+### `default_prefer_replica_location`
+
+- デフォルト：空文字列
+- タイプ：String
+- 単位：-
+- 変更可能：Yes
+- 説明：セッションがセッション変数 `prefer_replica_location` を設定していない場合に、この FE が計画するクエリで使用されるデフォルト値です。形式はテーブルプロパティ `labels.location` と同じで、例えば `dc:dc1` のように指定します。各 FE に異なる値を設定すると、自分のデータセンターの FE に接続したクライアントは、そのデータセンター内のレプリカを読み取ります。空の値は、優先する Location がないことを意味します。
+- 導入時期：v4.2
+
 ### `dynamic_partition_check_interval_seconds`
 
 - デフォルト：600

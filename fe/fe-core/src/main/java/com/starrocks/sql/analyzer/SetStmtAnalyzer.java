@@ -27,6 +27,7 @@ import com.starrocks.common.ErrorReport;
 import com.starrocks.common.StarRocksException;
 import com.starrocks.common.util.CompressionUtils;
 import com.starrocks.common.util.ParseUtil;
+import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.ConnectorSinkShuffleMode;
 import com.starrocks.connector.PlanMode;
@@ -269,6 +270,14 @@ public class SetStmtAnalyzer {
                 String supportedList = Joiner.on(",").join(SessionVariableConstants.ComputationFragmentSchedulingPolicy.values());
                 throw new SemanticException(String.format("Unsupported computation_fragment_scheduling_policy: %s, " +
                         "supported list is %s", policy, supportedList));
+            }
+        }
+
+        if (variable.equalsIgnoreCase(SessionVariable.PREFER_REPLICA_LOCATION)) {
+            String location = resolvedExpression.getStringValue();
+            if (!location.isEmpty() && !location.matches(PropertyAnalyzer.MULTI_LOCATION_LABELS_REGEX)) {
+                throw new SemanticException(String.format("Invalid prefer_replica_location: %s, " +
+                        "should be like 'key:value' or 'k1:v1,k2:v2'", location));
             }
         }
 
