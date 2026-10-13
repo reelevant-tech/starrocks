@@ -1283,7 +1283,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
      * Location tiers, nearest first and separated by ';', each in the format of the table property
      * labels.location (e.g. "dc:dc1; dc:dc2"), or "auto" to order the backend locations by the round
      * trip measured from this Frontend. A query reads its replicas, and runs its gather fragment, in
-     * the first tier that has an available replica of every tablet, and falls back tier by tier.
+     * the nearest tier that has an available replica of one of its tablets, and reads the tablets
+     * that are missing there tier by tier.
      * Empty means the Frontend config default_prefer_replica_location.
      */
     @VariableMgr.VarAttr(name = PREFER_REPLICA_LOCATION)

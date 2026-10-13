@@ -273,19 +273,20 @@ public class CoordinatorPreprocessor {
     }
 
     /**
-     * @return the scan ranges of the scans of internal tables, the only ones whose replicas are placed by location
+     * @return the scan ranges of the scans of internal tables, the only ones whose replicas are placed by location, with
+     * the rows that the optimizer expects each scan to return
      */
-    private static List<List<TScanRangeLocations>> internalScanRanges(List<ScanNode> scanNodes) {
-        List<List<TScanRangeLocations>> scanRanges = Lists.newArrayList();
+    private static List<ReplicaLocationPreference.Scan> internalScanRanges(List<ScanNode> scanNodes) {
+        List<ReplicaLocationPreference.Scan> scans = Lists.newArrayList();
         for (ScanNode scanNode : scanNodes) {
             if (scanNode instanceof OlapScanNode || scanNode instanceof MetaScanNode) {
                 List<TScanRangeLocations> locations = scanNode.getScanRangeLocations(0);
                 if (locations != null) {
-                    scanRanges.add(locations);
+                    scans.add(new ReplicaLocationPreference.Scan(locations, scanNode.getCardinality()));
                 }
             }
         }
-        return scanRanges;
+        return scans;
     }
 
     @VisibleForTesting

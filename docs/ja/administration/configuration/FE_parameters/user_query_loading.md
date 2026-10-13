@@ -246,6 +246,15 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - 説明：BE ごとに保持する測定回数です。BE への往復時間はそれらの最小値とするため、一時的な遅延で Location の順序が変わることはありません。
 - 導入時期：v4.2
 
+### `prefer_replica_location_split_max_rows`
+
+- デフォルト：1000000
+- タイプ：Long
+- 単位：-
+- 変更可能：Yes
+- 説明：`prefer_replica_location` を使用すると、クエリは最も近い Location で実行され、そこに利用可能なレプリカがない Tablet は次の Location から読み取られます。オプティマイザが、スキャンがそれらの Tablet から返す行数をこの値より多いと見積もった場合、それらの行が Location をまたがないように、クエリ全体が、すべての Tablet に利用可能なレプリカがある最も近い Location で実行されます。
+- 導入時期：v4.2
+
 ### `dynamic_partition_check_interval_seconds`
 
 - デフォルト：600

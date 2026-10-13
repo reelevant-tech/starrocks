@@ -2929,6 +2929,14 @@ public class Config extends ConfigBase {
     public static int backend_latency_probe_window = 24;
 
     /**
+     * With prefer_replica_location, the tablets without an available replica in the nearest location are read from the
+     * next locations. When the optimizer expects the scans to return more rows than this from those tablets, the whole
+     * query moves instead to the nearest location that has every tablet, so that these rows do not cross locations.
+     */
+    @ConfField(mutable = true, comment = "Rows read outside the nearest location above which the whole query moves there")
+    public static long prefer_replica_location_split_max_rows = 1000000;
+
+    /**
      * This will limit the max recursion depth of hash distribution pruner.
      * eg: where `a` in (5 elements) and `b` in (4 elements) and `c` in (3 elements) and `d` in (2 elements).
      * a/b/c/d are distribution columns, so the recursion depth will be 5 * 4 * 3 * 2 = 120, larger than 100,

@@ -14,7 +14,9 @@
 
 package com.starrocks.qe.scheduler;
 
+import com.starrocks.common.Config;
 import com.starrocks.qe.scheduler.BackendLatencyProber.LocationTier;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference.Scan;
 import com.starrocks.system.Backend;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TScanRangeLocation;
@@ -50,6 +52,14 @@ public class ReplicaLocationPreferenceTest {
         return range;
     }
 
+    /**
+     * @return one scan per list of ranges, with no row estimate
+     */
+    @SafeVarargs
+    private static List<Scan> scans(List<TScanRangeLocations>... scans) {
+        return Arrays.stream(scans).map(ranges -> new Scan(ranges, -1)).collect(Collectors.toList());
+    }
+
     private static List<Long> backendIds(List<TScanRangeLocation> locations) {
         return locations.stream().map(TScanRangeLocation::getBackend_id).collect(Collectors.toList());
     }
@@ -62,7 +72,7 @@ public class ReplicaLocationPreferenceTest {
     @Test
     public void testFirstTierWithEveryTabletIsChosen() {
         ReplicaLocationPreference preference = tiers();
-        preference.prepare(List.of(List.of(range(1, 2, 4), range(1, 3))), ALL_AVAILABLE);
+        preference.prepare(scans(List.of(range(1, 2, 4), range(1, 3))), ALL_AVAILABLE);
         Assertions.assertEquals("a", preference.getChosenTierName());
         Assertions.assertFalse(preference.isSplit());
         Assertions.assertEquals(List.of(1L), preferred(preference, range(1, 2, 4), ALL_AVAILABLE));
@@ -70,13 +80,58 @@ public class ReplicaLocationPreferenceTest {
     }
 
     @Test
-    public void testNextTierWithEveryTabletIsChosenOverAPartialFirstTier() {
+    public void testPartialFirstTierIsKeptAndItsMissingTabletsAreReadFromTheNextTier() {
         ReplicaLocationPreference preference = tiers();
-        preference.prepare(List.of(List.of(range(1, 2), range(2, 3))), ALL_AVAILABLE);
+        // Tier b has every tablet, but the nearest tier has one: the query stays there and reads the other one in b.
+        preference.prepare(scans(List.of(range(1, 2), range(2, 3))), ALL_AVAILABLE);
+        Assertions.assertEquals("a", preference.getChosenTierName());
+        Assertions.assertTrue(preference.isSplit());
+        Assertions.assertEquals(List.of(1L), preferred(preference, range(1, 2), ALL_AVAILABLE));
+        Assertions.assertEquals(List.of(2L, 3L), preferred(preference, range(2, 3), ALL_AVAILABLE));
+    }
+
+    @Test
+    public void testFirstTierWithoutAnyTabletIsSkipped() {
+        ReplicaLocationPreference preference = tiers();
+        preference.prepare(scans(List.of(range(2, 4), range(3))), ALL_AVAILABLE);
         Assertions.assertEquals("b", preference.getChosenTierName());
         Assertions.assertFalse(preference.isSplit());
-        Assertions.assertEquals(List.of(2L), preferred(preference, range(1, 2), ALL_AVAILABLE));
-        Assertions.assertEquals(List.of(2L, 3L), preferred(preference, range(2, 3), ALL_AVAILABLE));
+        Assertions.assertEquals(List.of(2L), preferred(preference, range(2, 4), ALL_AVAILABLE));
+    }
+
+    @Test
+    public void testManyRowsOutsideTheNearestTierMoveTheQueryToACompleteTier() {
+        long maxRows = Config.prefer_replica_location_split_max_rows;
+        try {
+            Config.prefer_replica_location_split_max_rows = 1000;
+            List<TScanRangeLocations> ranges = List.of(range(1, 2), range(2, 3));
+
+            // Half of the tablets of the scan are outside tier a: 1,000 of its 2,000 rows, which is not above the limit.
+            ReplicaLocationPreference preference = tiers();
+            preference.prepare(List.of(new Scan(ranges, 2000)), ALL_AVAILABLE);
+            Assertions.assertEquals("a", preference.getChosenTierName());
+            Assertions.assertTrue(preference.isSplit());
+
+            preference = tiers();
+            preference.prepare(List.of(new Scan(ranges, 2002)), ALL_AVAILABLE);
+            Assertions.assertEquals("b", preference.getChosenTierName());
+            Assertions.assertFalse(preference.isSplit());
+            Assertions.assertEquals(List.of(2L), preferred(preference, range(1, 2), ALL_AVAILABLE));
+
+            // The rows of a scan that is entirely in tier a do not count, nor does a scan without an estimate.
+            preference = tiers();
+            preference.prepare(List.of(new Scan(List.of(range(1, 2)), 1000000), new Scan(ranges, 2000),
+                    new Scan(List.of(range(2)), -1)), ALL_AVAILABLE);
+            Assertions.assertEquals("a", preference.getChosenTierName());
+
+            // No tier has every tablet: the query stays in the nearest one whatever the rows.
+            preference = tiers();
+            preference.prepare(List.of(new Scan(List.of(range(1, 2), range(4)), 1000000)), ALL_AVAILABLE);
+            Assertions.assertEquals("a", preference.getChosenTierName());
+            Assertions.assertTrue(preference.isSplit());
+        } finally {
+            Config.prefer_replica_location_split_max_rows = maxRows;
+        }
     }
 
     @Test
@@ -84,7 +139,7 @@ public class ReplicaLocationPreferenceTest {
         ReplicaLocationPreference preference = tiers();
         // Every tier covers one tablet of two: the first one is chosen, and the other tablets come from the next
         // tiers in order, then from backends outside every tier.
-        preference.prepare(List.of(List.of(range(1, 4)), List.of(range(2, 9))), ALL_AVAILABLE);
+        preference.prepare(scans(List.of(range(1, 4)), List.of(range(2, 9))), ALL_AVAILABLE);
         Assertions.assertEquals("a", preference.getChosenTierName());
         Assertions.assertTrue(preference.isSplit());
         Assertions.assertEquals(List.of(1L), preferred(preference, range(1, 4), ALL_AVAILABLE));
@@ -97,7 +152,7 @@ public class ReplicaLocationPreferenceTest {
     public void testDeadBackendsDoNotCount() {
         ReplicaLocationPreference preference = tiers();
         Predicate<Long> available = id -> id != 1L;
-        preference.prepare(List.of(List.of(range(1, 2))), available);
+        preference.prepare(scans(List.of(range(1, 2))), available);
         Assertions.assertEquals("b", preference.getChosenTierName());
         Assertions.assertFalse(preference.isSplit());
         Assertions.assertEquals(List.of(2L), preferred(preference, range(1, 2), available));
@@ -109,7 +164,7 @@ public class ReplicaLocationPreferenceTest {
     @Test
     public void testBackendsOutsideEveryTierComeLast() {
         ReplicaLocationPreference preference = tiers();
-        preference.prepare(List.of(List.of(range(9))), ALL_AVAILABLE);
+        preference.prepare(scans(List.of(range(9))), ALL_AVAILABLE);
         Assertions.assertTrue(preference.isSplit());
         Assertions.assertEquals(List.of(9L), preferred(preference, range(9), ALL_AVAILABLE));
         Assertions.assertEquals(List.of(3L), preferred(preference, range(9, 3), ALL_AVAILABLE));
@@ -158,7 +213,7 @@ public class ReplicaLocationPreferenceTest {
     @Test
     public void testPreferredBackendsKeepTheirOrder() {
         ReplicaLocationPreference preference = tiers();
-        preference.prepare(List.of(List.of(range(2, 3))), ALL_AVAILABLE);
+        preference.prepare(scans(List.of(range(2, 3))), ALL_AVAILABLE);
         Assertions.assertEquals(Arrays.asList(3L, 2L), preference.preferBackends(List.of(3L, 2L, 9L), ALL_AVAILABLE));
     }
 }

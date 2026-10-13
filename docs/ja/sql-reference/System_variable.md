@@ -1291,7 +1291,7 @@ MySQL JDBC バージョン 8.0.16 以降との互換性のために使用され�
 
 ### prefer_replica_location
 
-* **説明**: 共有なしクラスタでクエリの実行に優先して使用する BE の Location を、近い順の階層として `;` で区切って指定します。各階層の形式はテーブルプロパティ `labels.location` と同じで、例えば `dc:dc1; dc:dc2` や `dc:dc1,dc:dc2` のように指定します。`auto` を指定すると、FE が各 BE に対して測定したネットワークの往復時間の順に BE の Location を並べます（FE 設定項目 `backend_latency_probe_interval_ms` を参照）。クエリは 1 つの階層内で実行されます。スキャンするすべての Tablet に利用可能なレプリカがある最初の階層、なければ最も多くの Tablet をカバーする階層が選ばれます。スキャンはその階層のレプリカを読み取り、Gather Fragment もその階層の BE で実行されます。その階層に利用可能なレプリカがない Tablet は、次の階層から順に、最後は任意の BE から読み取られます。クラスタの BE が複数のデータセンターにまたがり、各データセンターがレプリカを 1 つ保持している場合に、クエリを 1 つのデータセンター内に保つことができます。中間 Fragment がスキャンの BE に従うのは、`choose_execute_instances_mode` が `LOCALITY`（デフォルト）かつ `prefer_compute_node` が `false`（デフォルト）の場合のみです。空の値は、クエリを計画する FE の設定項目 `default_prefer_replica_location` の値を意味します。
+* **説明**: 共有なしクラスタでクエリの実行に優先して使用する BE の Location を、近い順の階層として `;` で区切って指定します。各階層の形式はテーブルプロパティ `labels.location` と同じで、例えば `dc:dc1; dc:dc2` や `dc:dc1,dc:dc2` のように指定します。`auto` を指定すると、FE が各 BE に対して測定したネットワークの往復時間の順に BE の Location を並べます（FE 設定項目 `backend_latency_probe_interval_ms` を参照）。クエリは、スキャンする Tablet のうち少なくとも 1 つに利用可能なレプリカがある最も近い階層で実行されます。スキャンはその階層のレプリカを読み取り、Gather Fragment もその階層の BE で実行されます。その階層に利用可能なレプリカがない Tablet は、次の階層から順に、最後は任意の BE から読み取られます。スキャンがそれらの Tablet から返すと見積もられる行数が FE 設定項目 `prefer_replica_location_split_max_rows` を超え、すべての Tablet に利用可能なレプリカがある階層が存在する場合は、クエリ全体がそのような階層のうち最も近いもので実行されます。クラスタの BE が複数のデータセンターにまたがり、各データセンターがレプリカを 1 つ保持している場合に、クエリを 1 つのデータセンター内に保つことができます。中間 Fragment がスキャンの BE に従うのは、`choose_execute_instances_mode` が `LOCALITY`（デフォルト）かつ `prefer_compute_node` が `false`（デフォルト）の場合のみです。空の値は、クエリを計画する FE の設定項目 `default_prefer_replica_location` の値を意味します。
 * **デフォルト**: 空文字列
 * **データ型**: String
 * **導入バージョン**: v4.2
