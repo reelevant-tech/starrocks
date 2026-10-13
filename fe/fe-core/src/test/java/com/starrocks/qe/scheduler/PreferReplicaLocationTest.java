@@ -233,4 +233,51 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
             SimpleScheduler.getHostBlacklist().clear();
         }
     }
+
+    @Test
+    public void testOrderedTiersFallBackToTheNextTier() throws Exception {
+        connectContext.getSessionVariable().setPreferReplicaLocation("dc:a; dc:b");
+        Assertions.assertEquals(LOCATION_A, scanWorkers(SCAN));
+
+        Backend backend = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackend(BACKEND1_ID);
+        backend.setAlive(false);
+        try {
+            // The whole query moves to the next tier, gather fragment included.
+            Assertions.assertEquals(LOCATION_B, scanWorkers(SCAN));
+            for (int i = 0; i < RUNS; i++) {
+                Map<String, Set<Long>> workers = scheduledWorkers(SHUFFLE_AGG);
+                Assertions.assertTrue(LOCATION_B.containsAll(allWorkers(workers)), "workers outside dc:b: " + workers);
+            }
+        } finally {
+            backend.setAlive(true);
+        }
+    }
+
+    @Test
+    public void testAutoFollowsTheMeasuredRoundTrip() throws Exception {
+        BackendLatencyProber prober = GlobalStateMgr.getCurrentState().getBackendLatencyProber();
+        connectContext.getSessionVariable().setPreferReplicaLocation("auto");
+        try {
+            prober.clearForTest();
+            // Nothing measured yet: no preference.
+            Assertions.assertEquals(ALL_BACKENDS, scanWorkers(SCAN));
+
+            prober.setRttMsForTest(BACKEND1_ID, 4.6);
+            prober.setRttMsForTest(BACKEND2_ID, 0.1);
+            prober.setRttMsForTest(BACKEND3_ID, 0.1);
+            Assertions.assertEquals(LOCATION_B, scanWorkers(SCAN));
+            for (int i = 0; i < RUNS; i++) {
+                Map<String, Set<Long>> workers = scheduledWorkers(SHUFFLE_AGG);
+                Assertions.assertTrue(LOCATION_B.containsAll(allWorkers(workers)), "workers outside dc:b: " + workers);
+            }
+
+            prober.setRttMsForTest(BACKEND1_ID, 0.1);
+            prober.setRttMsForTest(BACKEND2_ID, 4.6);
+            prober.setRttMsForTest(BACKEND3_ID, 4.6);
+            Assertions.assertEquals(LOCATION_A, scanWorkers(SCAN));
+            Assertions.assertEquals(LOCATION_A, allWorkers(scheduledWorkers(SHUFFLE_AGG)));
+        } finally {
+            prober.clearForTest();
+        }
+    }
 }

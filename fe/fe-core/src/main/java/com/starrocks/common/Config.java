@@ -2908,12 +2908,25 @@ public class Config extends ConfigBase {
 
     /**
      * Default value of the session variable prefer_replica_location for queries planned by this Frontend,
-     * used when the session does not set it. Same format as the table property labels.location,
-     * for example "dc:dc1". Set a different value on each Frontend so that clients connected to the
-     * Frontend of their data center read the replicas of that data center.
+     * used when the session does not set it: "auto" to read in the nearest location by the round trip
+     * measured from this Frontend, or location tiers nearest first in the format of the table property
+     * labels.location, for example "dc:dc1; dc:dc2".
      */
     @ConfField(mutable = true, comment = "Default prefer_replica_location for queries planned by this FE")
     public static String default_prefer_replica_location = "";
+
+    /**
+     * How often this Frontend measures its network round trip to every backend (a TCP connection), which
+     * orders the backend locations for prefer_replica_location = "auto".
+     */
+    @ConfField(mutable = true, comment = "Interval of the round trip probe from this FE to every BE")
+    public static long backend_latency_probe_interval_ms = 5000;
+
+    @ConfField(mutable = true, comment = "Timeout of one round trip probe to a BE")
+    public static int backend_latency_probe_timeout_ms = 1000;
+
+    @ConfField(mutable = true, comment = "Number of probes kept per BE; the round trip is the minimum over them")
+    public static int backend_latency_probe_window = 24;
 
     /**
      * This will limit the max recursion depth of hash distribution pruner.

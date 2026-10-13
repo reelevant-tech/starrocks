@@ -225,7 +225,34 @@ Starting from version 3.3.0, the system defaults to refreshing one partition at 
 - Type: String
 - Unit: -
 - Is mutable: Yes
-- Description: The default value of the session variable `prefer_replica_location` for the queries planned by this FE, used when the session does not set it. It has the same format as the table property `labels.location`, for example `dc:dc1`. Set a different value on each FE so that the clients connected to the FE of their data center read the replicas in that data center. An empty value means that no location is preferred.
+- Description: The default value of the session variable `prefer_replica_location` for the queries planned by this FE, used when the session does not set it: `auto` to read in the nearest location by the network round trip measured from this FE, or location tiers from the nearest to the farthest, separated by `;`, each in the format of the table property `labels.location`, for example `dc:dc1; dc:dc2`. An empty value means that no location is preferred.
+- Introduced in: v4.2
+
+### `backend_latency_probe_interval_ms`
+
+- Default: 5000
+- Type: Long
+- Unit: Milliseconds
+- Is mutable: Yes
+- Description: How often this FE measures its network round trip to every BE, by opening a TCP connection to its port. The round trips order the locations of the BEs for `prefer_replica_location` = `auto`, and are exported as the metric `backend_rtt_ms`.
+- Introduced in: v4.2
+
+### `backend_latency_probe_timeout_ms`
+
+- Default: 1000
+- Type: Int
+- Unit: Milliseconds
+- Is mutable: Yes
+- Description: The timeout of one round trip probe to a BE. A BE that does not answer within it counts as unreachable for that probe.
+- Introduced in: v4.2
+
+### `backend_latency_probe_window`
+
+- Default: 24
+- Type: Int
+- Unit: -
+- Is mutable: Yes
+- Description: The number of probes kept per BE. The round trip to a BE is the minimum over them, so that a transient slowdown does not reorder the locations.
 - Introduced in: v4.2
 
 ### `dynamic_partition_check_interval_seconds`

@@ -133,6 +133,9 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_QUERY_ALL;
     public static LongCounterMetric COUNTER_QUERY_ERR;
     public static LongCounterMetric COUNTER_QUERY_TIMEOUT;
+    public static LongCounterMetric COUNTER_REPLICA_LOCATION_FIRST_TIER;
+    public static LongCounterMetric COUNTER_REPLICA_LOCATION_LATER_TIER;
+    public static LongCounterMetric COUNTER_REPLICA_LOCATION_SPLIT;
     public static LongCounterMetric COUNTER_QUERY_SUCCESS;
     public static LongCounterMetric COUNTER_SLOW_QUERY;
     public static LongCounterMetric COUNTER_ICEBERG_TIME_TRAVEL_QUERY_TOTAL;
@@ -871,6 +874,15 @@ public final class MetricRepo {
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REQUEST_ALL);
         COUNTER_QUERY_ALL = new LongCounterMetric("query_total", MetricUnit.REQUESTS, "total query");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_ALL);
+        COUNTER_REPLICA_LOCATION_FIRST_TIER = new LongCounterMetric("replica_location_queries_first_tier",
+                MetricUnit.REQUESTS, "queries with prefer_replica_location whose backends are in the nearest tier");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REPLICA_LOCATION_FIRST_TIER);
+        COUNTER_REPLICA_LOCATION_LATER_TIER = new LongCounterMetric("replica_location_queries_later_tier",
+                MetricUnit.REQUESTS, "queries with prefer_replica_location whose backends are in a later tier");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REPLICA_LOCATION_LATER_TIER);
+        COUNTER_REPLICA_LOCATION_SPLIT = new LongCounterMetric("replica_location_queries_split",
+                MetricUnit.REQUESTS, "queries with prefer_replica_location that read some tablets outside their tier");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REPLICA_LOCATION_SPLIT);
         COUNTER_QUERY_ERR = new LongCounterMetric("query_err", MetricUnit.REQUESTS, "total error query");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_ERR);
         COUNTER_QUERY_TIMEOUT = new LongCounterMetric("query_timeout", MetricUnit.REQUESTS, "total timeout query");

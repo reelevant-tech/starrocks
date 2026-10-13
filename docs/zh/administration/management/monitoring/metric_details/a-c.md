@@ -27,6 +27,11 @@ description: "Alphabetical a - c"
 - 单位：计数
 - 描述：tablet delta writer 线程池中排队的任务数量。
 
+## `backend_rtt_ms`
+
+- 单位：毫秒
+- 描述：该 FE 到某个 BE 的网络往返时间，每 `backend_latency_probe_interval_ms` 通过一次 TCP 连接测量，取最近 `backend_latency_probe_window` 次探测的最小值。标签：`backend_id`、`host`。用于在 `prefer_replica_location` = `auto` 时对 BE 的 Location 排序。
+
 ## `base_compaction_task_byte_per_second`
 
 - 单位：字节/秒

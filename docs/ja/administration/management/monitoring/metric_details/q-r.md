@@ -72,6 +72,21 @@ description: "Alphabetical q - r"
 - 単位: 個
 - 説明: FE カタログのリサイクルビンに現在保持されているテーブルの数。
 
+## `replica_location_queries_first_tier`
+
+- 単位: カウント
+- 説明: `prefer_replica_location` が設定され、BE が最も近い階層から選ばれたクエリの数です。
+
+## `replica_location_queries_later_tier`
+
+- 単位: カウント
+- 説明: `prefer_replica_location` が設定され、最も近い階層に一部の Tablet の利用可能なレプリカがなかったため、BE がより遠い階層から選ばれたクエリの数です。
+
+## `replica_location_queries_split`
+
+- 単位: カウント
+- 説明: `prefer_replica_location` が設定されているが、すべての Tablet の利用可能なレプリカを持つ階層がなかったため、一部の Tablet を選ばれた階層の外から読み取ったクエリの数です。
+
 ## `resource_group_bigquery_count`
 
 - 単位: カウント

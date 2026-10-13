@@ -16,6 +16,7 @@ package com.starrocks.qe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.ResourceGroupClassifier;
 import com.starrocks.catalog.ResourceGroupMgr;
@@ -26,6 +27,8 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.lake.qe.scheduler.DefaultSharedDataWorkerProvider;
 import com.starrocks.planner.DataPartition;
 import com.starrocks.planner.DataSink;
+import com.starrocks.planner.MetaScanNode;
+import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.PlanFragmentId;
 import com.starrocks.planner.ResultSink;
@@ -52,6 +55,7 @@ import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.TDescriptorTable;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TQueryGlobals;
+import com.starrocks.thrift.TScanRangeLocations;
 import com.starrocks.thrift.TUniqueId;
 import com.starrocks.thrift.TWorkGroup;
 import org.apache.commons.lang3.StringUtils;
@@ -268,8 +272,29 @@ public class CoordinatorPreprocessor {
         return executionDAG.getFragment(fragmentId).getScanRangeAssignment();
     }
 
+    /**
+     * @return the scan ranges of the scans of internal tables, the only ones whose replicas are placed by location
+     */
+    private static List<List<TScanRangeLocations>> internalScanRanges(List<ScanNode> scanNodes) {
+        List<List<TScanRangeLocations>> scanRanges = Lists.newArrayList();
+        for (ScanNode scanNode : scanNodes) {
+            if (scanNode instanceof OlapScanNode || scanNode instanceof MetaScanNode) {
+                List<TScanRangeLocations> locations = scanNode.getScanRangeLocations(0);
+                if (locations != null) {
+                    scanRanges.add(locations);
+                }
+            }
+        }
+        return scanRanges;
+    }
+
     @VisibleForTesting
     void computeFragmentInstances() throws StarRocksException {
+        ReplicaLocationPreference locationPreference = executionDAG.getReplicaLocationPreference();
+        if (locationPreference != null) {
+            WorkerProvider workerProvider = lazyWorkerProvider.get();
+            locationPreference.prepare(internalScanRanges(jobSpec.getScanNodes()), workerProvider::isDataNodeAvailable);
+        }
         for (ExecutionFragment execFragment : executionDAG.getFragmentsInPostorder()) {
             fragmentAssignmentStrategyFactory.create(execFragment, lazyWorkerProvider.get()).assignFragmentToWorker(execFragment);
         }

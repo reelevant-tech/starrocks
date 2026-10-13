@@ -199,6 +199,7 @@ import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.ShowExecutor;
 import com.starrocks.qe.SimpleScheduler;
 import com.starrocks.qe.VariableMgr;
+import com.starrocks.qe.scheduler.BackendLatencyProber;
 import com.starrocks.qe.scheduler.Deployer;
 import com.starrocks.qe.scheduler.slot.BaseSlotManager;
 import com.starrocks.qe.scheduler.slot.GlobalSlotProvider;
@@ -322,6 +323,7 @@ public class GlobalStateMgr {
     private final ThreadPoolExecutor lakeAlterPublishExecutor;
 
     private final PortConnectivityChecker portConnectivityChecker;
+    private final BackendLatencyProber backendLatencyProber;
 
     private final Load load;
     private final LoadMgr loadMgr;
@@ -594,6 +596,10 @@ public class GlobalStateMgr {
         return heartbeatMgr;
     }
 
+    public BackendLatencyProber getBackendLatencyProber() {
+        return backendLatencyProber;
+    }
+
     public TabletInvertedIndex getTabletInvertedIndex() {
         return this.tabletInvertedIndex;
     }
@@ -686,6 +692,7 @@ public class GlobalStateMgr {
         this.nodeMgr = Objects.requireNonNullElseGet(nodeMgr, NodeMgr::new);
         this.heartbeatMgr = new HeartbeatMgr(!isCkptGlobalState);
         this.portConnectivityChecker = new PortConnectivityChecker();
+        this.backendLatencyProber = new BackendLatencyProber();
 
         // Alter Job Manager
         // Alter Job Manager
@@ -1598,6 +1605,7 @@ public class GlobalStateMgr {
         }
 
         portConnectivityChecker.start();
+        backendLatencyProber.start();
         tabletStatMgr.start();
         // load and export job label cleaner thread
         labelCleaner.start();

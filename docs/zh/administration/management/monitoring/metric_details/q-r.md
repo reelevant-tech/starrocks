@@ -114,6 +114,21 @@ description: "Alphabetical q - r"
 - 单位：个
 - 描述：FE Catalog 回收站中当前保留的表数量。
 
+## `replica_location_queries_first_tier`
+
+- 单位：计数
+- 描述：设置了 `prefer_replica_location` 且 BE 选在最近层级内的查询数。
+
+## `replica_location_queries_later_tier`
+
+- 单位：计数
+- 描述：设置了 `prefer_replica_location` 且 BE 选在较远层级内的查询数，原因是最近的层级缺少其部分 Tablet 的可用副本。
+
+## `replica_location_queries_split`
+
+- 单位：计数
+- 描述：设置了 `prefer_replica_location` 但有部分 Tablet 在所选层级之外读取的查询数，原因是没有任何层级拥有每个 Tablet 的可用副本。
+
 ## `resource_group_bigquery_count`
 
 - 单位：计数
