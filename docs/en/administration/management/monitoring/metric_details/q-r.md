@@ -122,12 +122,12 @@ description: "Alphabetical q - r"
 ## `replica_location_queries_later_tier`
 
 - Unit: Count
-- Description: Number of queries with `prefer_replica_location` set whose backends were picked in a later tier, because the nearest one lacked an available replica of some of their tablets.
+- Description: Number of queries with `prefer_replica_location` set whose backends were picked in a later tier, because the nearest one had no available replica of any of their tablets, or because too many rows had to be read outside it (`prefer_replica_location_split_max_rows`).
 
 ## `replica_location_queries_split`
 
 - Unit: Count
-- Description: Number of queries with `prefer_replica_location` set that read some tablets outside their tier, because no tier had an available replica of every tablet.
+- Description: Number of queries with `prefer_replica_location` set that read some tablets outside their tier, because it had no available replica of them.
 
 ## `resource_group_bigquery_count`
 

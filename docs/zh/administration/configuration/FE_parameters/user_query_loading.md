@@ -320,6 +320,15 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - 描述: 每个 BE 保留的探测次数。到某个 BE 的往返时间取这些探测中的最小值，以免短暂的抖动改变 Location 的顺序。
 - 引入版本: v4.2
 
+### `prefer_replica_location_split_max_rows`
+
+- 默认值: 1000000
+- 类型: Long
+- 单位: -
+- 是否可变: Yes
+- 描述: 使用 `prefer_replica_location` 时，查询在最近的 Location 内执行，并从后续 Location 读取在该 Location 内没有可用副本的 Tablet。当优化器预计扫描从这些 Tablet 返回的行数超过该值时，整个查询改为在最近的、对每个 Tablet 都有可用副本的 Location 内执行，以避免这些行跨 Location 传输。
+- 引入版本: v4.2
+
 ### `dynamic_partition_check_interval_seconds`
 
 - 默认值: 600

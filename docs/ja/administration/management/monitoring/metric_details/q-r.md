@@ -80,12 +80,12 @@ description: "Alphabetical q - r"
 ## `replica_location_queries_later_tier`
 
 - 単位: カウント
-- 説明: `prefer_replica_location` が設定され、最も近い階層に一部の Tablet の利用可能なレプリカがなかったため、BE がより遠い階層から選ばれたクエリの数です。
+- 説明: `prefer_replica_location` が設定され、最も近い階層にどの Tablet の利用可能なレプリカもなかったため、またはその階層の外から読み取る行数が多すぎたため（`prefer_replica_location_split_max_rows`）、BE がより遠い階層から選ばれたクエリの数です。
 
 ## `replica_location_queries_split`
 
 - 単位: カウント
-- 説明: `prefer_replica_location` が設定されているが、すべての Tablet の利用可能なレプリカを持つ階層がなかったため、一部の Tablet を選ばれた階層の外から読み取ったクエリの数です。
+- 説明: `prefer_replica_location` が設定されているが、選ばれた階層に利用可能なレプリカがなかったため、一部の Tablet をその階層の外から読み取ったクエリの数です。
 
 ## `resource_group_bigquery_count`
 

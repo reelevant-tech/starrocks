@@ -17,6 +17,7 @@ package com.starrocks.qe.scheduler;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Multimap;
 import com.starrocks.clone.TabletChecker;
+import com.starrocks.common.Config;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.qe.ConnectContext;
@@ -43,9 +44,10 @@ import java.util.stream.Collectors;
  * The locations preferred for the backends of a query, as ordered tiers: the session variable prefer_replica_location
  * lists them nearest first, or "auto" orders the backend locations by the round trip measured by
  * {@link BackendLatencyProber}. Before the backends are picked, {@link #prepare} chooses one tier for the whole query,
- * the first one that has an available replica of every tablet, else the one that has the most. The scans read the
- * replicas in that tier and the gather fragment runs there, so that the fragments exchange data inside one location;
- * a tablet without a replica there is read from the next tiers in order, then from any backend.
+ * the nearest one that has an available replica of at least one tablet. The scans read the replicas in that tier and
+ * the gather fragment runs there, so that the fragments exchange data inside one location; a tablet without a replica
+ * there is read from the next tiers in order, then from any backend. Only when the scans are expected to return many
+ * rows from such tablets does the query move to the nearest tier that has every tablet.
  */
 public class ReplicaLocationPreference {
     private final List<String> tierNames;
@@ -53,6 +55,12 @@ public class ReplicaLocationPreference {
     private int chosenTier = 0;
     private int tabletCount = 0;
     private int coveredCount = 0;
+
+    /**
+     * The scan ranges of one scan node and the rows that the optimizer expects it to return, negative when unknown.
+     */
+    public record Scan(List<TScanRangeLocations> ranges, long estimatedRows) {
+    }
 
     @VisibleForTesting
     ReplicaLocationPreference(List<String> tierNames, List<Set<Long>> tiers) {
@@ -94,33 +102,39 @@ public class ReplicaLocationPreference {
     }
 
     /**
-     * Choose the tier of the query from the replicas of its tablets: the first tier with an available replica of
-     * every tablet, else the tier with the most, the first one on ties.
+     * Choose the tier of the query from the replicas of its tablets: the nearest tier with an available replica of at
+     * least one tablet. The tablets that it misses are read from the next tiers, which costs fewer round trips to a far
+     * location than running the whole query there. When the scans are expected to return more than
+     * prefer_replica_location_split_max_rows rows from those tablets, the query moves instead to the nearest tier with
+     * an available replica of every tablet, if there is one, so that these rows do not cross locations.
      */
-    public void prepare(Collection<List<TScanRangeLocations>> scanRanges, Predicate<Long> isAvailable) {
+    public void prepare(Collection<Scan> scans, Predicate<Long> isAvailable) {
         int total = 0;
         int[] covered = new int[tiers.size()];
-        for (List<TScanRangeLocations> ranges : scanRanges) {
-            for (TScanRangeLocations range : ranges) {
+        for (Scan scan : scans) {
+            for (TScanRangeLocations range : scan.ranges()) {
                 total++;
                 for (int tier = 0; tier < tiers.size(); tier++) {
-                    for (TScanRangeLocation location : range.getLocations()) {
-                        if (tiers.get(tier).contains(location.getBackend_id()) && isAvailable.test(location.getBackend_id())) {
-                            covered[tier]++;
-                            break;
-                        }
+                    if (isCovered(range, tier, isAvailable)) {
+                        covered[tier]++;
                     }
                 }
             }
         }
         chosenTier = 0;
         for (int tier = 0; tier < tiers.size(); tier++) {
-            if (covered[tier] == total) {
+            if (covered[tier] > 0) {
                 chosenTier = tier;
                 break;
             }
-            if (covered[tier] > covered[chosenTier]) {
-                chosenTier = tier;
+        }
+        if (!tiers.isEmpty() && covered[chosenTier] < total &&
+                missingRows(scans, chosenTier, isAvailable) > Config.prefer_replica_location_split_max_rows) {
+            for (int tier = chosenTier + 1; tier < tiers.size(); tier++) {
+                if (covered[tier] == total) {
+                    chosenTier = tier;
+                    break;
+                }
             }
         }
         tabletCount = total;
@@ -132,6 +146,31 @@ public class ReplicaLocationPreference {
                 MetricRepo.COUNTER_REPLICA_LOCATION_SPLIT.increase(1L);
             }
         }
+    }
+
+    private boolean isCovered(TScanRangeLocations range, int tier, Predicate<Long> isAvailable) {
+        for (TScanRangeLocation location : range.getLocations()) {
+            if (tiers.get(tier).contains(location.getBackend_id()) && isAvailable.test(location.getBackend_id())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @return the rows that the scans are expected to return from the tablets without an available replica in a tier:
+     * the estimate of each scan, in proportion to its tablets outside the tier
+     */
+    private double missingRows(Collection<Scan> scans, int tier, Predicate<Long> isAvailable) {
+        double rows = 0;
+        for (Scan scan : scans) {
+            if (scan.estimatedRows() <= 0 || scan.ranges().isEmpty()) {
+                continue;
+            }
+            long missing = scan.ranges().stream().filter(range -> !isCovered(range, tier, isAvailable)).count();
+            rows += (double) scan.estimatedRows() * missing / scan.ranges().size();
+        }
+        return rows;
     }
 
     public String getChosenTierName() {

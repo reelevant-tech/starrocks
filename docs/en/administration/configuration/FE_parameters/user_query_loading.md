@@ -320,6 +320,15 @@ Starting from version 3.3.0, the system defaults to refreshing one partition at 
 - Description: The number of probes kept per BE. The round trip to a BE is the minimum over them, so that a transient slowdown does not reorder the locations.
 - Introduced in: v4.2
 
+### `prefer_replica_location_split_max_rows`
+
+- Default: 1000000
+- Type: Long
+- Unit: -
+- Is mutable: Yes
+- Description: With `prefer_replica_location`, a query runs in the nearest location and reads the tablets that have no available replica there from the next locations. When the optimizer expects its scans to return more rows than this value from those tablets, the whole query moves to the nearest location that has an available replica of every tablet, so that these rows do not cross locations.
+- Introduced in: v4.2
+
 ### `dynamic_partition_check_interval_seconds`
 
 - Default: 600

@@ -122,12 +122,12 @@ description: "Alphabetical q - r"
 ## `replica_location_queries_later_tier`
 
 - 单位：计数
-- 描述：设置了 `prefer_replica_location` 且 BE 选在较远层级内的查询数，原因是最近的层级缺少其部分 Tablet 的可用副本。
+- 描述：设置了 `prefer_replica_location` 且 BE 选在较远层级内的查询数，原因是最近的层级没有其任何 Tablet 的可用副本，或者需要在该层级之外读取的行数过多（`prefer_replica_location_split_max_rows`）。
 
 ## `replica_location_queries_split`
 
 - 单位：计数
-- 描述：设置了 `prefer_replica_location` 但有部分 Tablet 在所选层级之外读取的查询数，原因是没有任何层级拥有每个 Tablet 的可用副本。
+- 描述：设置了 `prefer_replica_location` 但有部分 Tablet 在所选层级之外读取的查询数，原因是所选层级没有这些 Tablet 的可用副本。
 
 ## `resource_group_bigquery_count`
 
