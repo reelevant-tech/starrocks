@@ -33,6 +33,7 @@ import com.starrocks.planner.expression.ExprToThrift;
 import com.starrocks.proto.PExecShortCircuitResult;
 import com.starrocks.qe.scheduler.LazyWorkerProvider;
 import com.starrocks.qe.scheduler.NonRecoverableException;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.rpc.BrpcProxy;
 import com.starrocks.rpc.ConfigurableSerDesFactory;
 import com.starrocks.rpc.PBackendService;
@@ -54,6 +55,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TDeserializer;
 
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -209,10 +211,15 @@ public class ShortCircuitHybridExecutor extends ShortCircuitExecutor {
         Map<Long, Backend> aliveIdToBackends = idToBackends.entrySet().stream()
                 .filter(be -> isWorkerAvailable(be.getValue()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        ReplicaLocationPreference locationPreference = ReplicaLocationPreference.of(context);
         for (TScanRangeLocations range : scanRangeLocations) {
             TInternalScanRange internalScanRange = range.getScan_range().getInternal_scan_range();
             Set<Long> scanBackendIds =
                     range.getLocations().stream().map(TScanRangeLocation::getBackend_id).collect(Collectors.toSet());
+            if (locationPreference != null) {
+                scanBackendIds = new LinkedHashSet<>(
+                        locationPreference.preferBackends(scanBackendIds, aliveIdToBackends::containsKey));
+            }
             TabletWithVersion tabletWithVersion = new TabletWithVersion(internalScanRange.getTablet_id(),
                     internalScanRange.getVersion());
 

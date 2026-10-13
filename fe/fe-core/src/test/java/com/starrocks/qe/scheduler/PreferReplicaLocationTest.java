@@ -16,7 +16,6 @@ package com.starrocks.qe.scheduler;
 
 import com.starrocks.common.Config;
 import com.starrocks.planner.MetaScanNode;
-import com.starrocks.planner.ScanNode;
 import com.starrocks.qe.DefaultCoordinator;
 import com.starrocks.qe.SimpleScheduler;
 import com.starrocks.qe.scheduler.dag.ExecutionFragment;
@@ -24,8 +23,6 @@ import com.starrocks.qe.scheduler.dag.FragmentInstance;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.plan.ExecPlan;
 import com.starrocks.system.Backend;
-import com.starrocks.thrift.TScanRangeLocation;
-import com.starrocks.thrift.TScanRangeLocations;
 import com.starrocks.utframe.UtFrameUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -50,7 +47,7 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
     private static final int RUNS = 20;
 
     private static final String SCAN = "select * from t_prefer_location";
-    // Rewritten to a MetaScanNode, which selects its replicas apart from OlapScanNode.
+    // Rewritten to a MetaScanNode, which lists its replicas apart from OlapScanNode.
     private static final String COUNT = "select count(*) from t_prefer_location";
     // Group by a column that is not the distribution key: scan, shuffled aggregation and gather fragments.
     private static final String SHUFFLE_AGG = "select v1, count(*) from t_prefer_location group by v1";
@@ -83,19 +80,6 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
         GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackend(backendId).setLocation(location);
     }
 
-    private Set<Long> scanCandidates(String sql) throws Exception {
-        ExecPlan plan = UtFrameUtils.getPlanAndFragment(connectContext, sql).second;
-        Set<Long> backendIds = new HashSet<>();
-        for (ScanNode scanNode : plan.getScanNodes()) {
-            for (TScanRangeLocations scanRange : scanNode.getScanRangeLocations(0)) {
-                for (TScanRangeLocation location : scanRange.getLocations()) {
-                    backendIds.add(location.getBackend_id());
-                }
-            }
-        }
-        return backendIds;
-    }
-
     private Map<String, Set<Long>> scheduledWorkers(String sql) throws Exception {
         DefaultCoordinator coordinator = startScheduling(sql);
         Map<String, Set<Long>> workerIdsByFragment = new TreeMap<>();
@@ -116,10 +100,26 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
         return workerIds;
     }
 
+    /**
+     * @return the workers that scan tablets: with 8 tablets, every backend that may scan does scan
+     */
+    private Set<Long> scanWorkers(String sql) throws Exception {
+        DefaultCoordinator coordinator = startScheduling(sql);
+        Set<Long> workerIds = new HashSet<>();
+        for (ExecutionFragment fragment : coordinator.getExecutionDAG().getFragmentsInPreorder()) {
+            for (FragmentInstance instance : fragment.getInstances()) {
+                if (!instance.getNode2ScanRanges().isEmpty()) {
+                    workerIds.add(instance.getWorkerId());
+                }
+            }
+        }
+        return workerIds;
+    }
+
     @Test
     public void testScanOnlyReadsReplicasInPreferredLocation() throws Exception {
         connectContext.getSessionVariable().setPreferReplicaLocation("dc:b");
-        Assertions.assertEquals(LOCATION_B, scanCandidates(SCAN));
+        Assertions.assertEquals(LOCATION_B, scanWorkers(SCAN));
     }
 
     @Test
@@ -127,44 +127,44 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
         connectContext.getSessionVariable().setPreferReplicaLocation("dc:b");
         ExecPlan plan = UtFrameUtils.getPlanAndFragment(connectContext, COUNT).second;
         Assertions.assertInstanceOf(MetaScanNode.class, plan.getScanNodes().get(0));
-        Assertions.assertEquals(LOCATION_B, scanCandidates(COUNT));
+        Assertions.assertEquals(LOCATION_B, scanWorkers(COUNT));
     }
 
     @Test
     public void testScanReadsAllReplicasWithoutPreferredLocation() throws Exception {
-        Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
-        Assertions.assertEquals(ALL_BACKENDS, scanCandidates(COUNT));
+        Assertions.assertEquals(ALL_BACKENDS, scanWorkers(SCAN));
+        Assertions.assertEquals(ALL_BACKENDS, scanWorkers(COUNT));
     }
 
     @Test
     public void testScanFallsBackWhenNoReplicaInPreferredLocation() throws Exception {
         connectContext.getSessionVariable().setPreferReplicaLocation("dc:c");
-        Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
-        Assertions.assertEquals(ALL_BACKENDS, scanCandidates(COUNT));
+        Assertions.assertEquals(ALL_BACKENDS, scanWorkers(SCAN));
+        Assertions.assertEquals(ALL_BACKENDS, scanWorkers(COUNT));
     }
 
     @Test
     public void testSeveralPreferredLocations() throws Exception {
         connectContext.getSessionVariable().setPreferReplicaLocation("dc:a, dc:b");
-        Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
+        Assertions.assertEquals(ALL_BACKENDS, scanWorkers(SCAN));
 
         connectContext.getSessionVariable().setPreferReplicaLocation("dc:*");
-        Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
+        Assertions.assertEquals(ALL_BACKENDS, scanWorkers(SCAN));
     }
 
     @Test
     public void testFrontendConfigIsTheDefault() throws Exception {
         Config.default_prefer_replica_location = "dc:a";
-        Assertions.assertEquals(LOCATION_A, scanCandidates(SCAN));
+        Assertions.assertEquals(LOCATION_A, scanWorkers(SCAN));
 
         connectContext.getSessionVariable().setPreferReplicaLocation("dc:b");
-        Assertions.assertEquals(LOCATION_B, scanCandidates(SCAN));
+        Assertions.assertEquals(LOCATION_B, scanWorkers(SCAN));
     }
 
     @Test
     public void testMalformedFrontendConfigIsIgnored() throws Exception {
         Config.default_prefer_replica_location = "not a location";
-        Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
+        Assertions.assertEquals(ALL_BACKENDS, scanWorkers(SCAN));
     }
 
     @Test
@@ -199,7 +199,7 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
         try {
             // The only backend of dc:a is down: read the other replicas instead of failing the query.
             connectContext.getSessionVariable().setPreferReplicaLocation("dc:a");
-            Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
+            Assertions.assertEquals(LOCATION_B, scanWorkers(SCAN));
             for (String sql : List.of(COUNT, SHUFFLE_AGG)) {
                 for (int i = 0; i < RUNS; i++) {
                     Map<String, Set<Long>> workers = scheduledWorkers(sql);
@@ -217,7 +217,7 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
         backend.setAlive(false);
         try {
             connectContext.getSessionVariable().setPreferReplicaLocation("dc:b");
-            Assertions.assertEquals(Set.of(BACKEND3_ID), scanCandidates(SCAN));
+            Assertions.assertEquals(Set.of(BACKEND3_ID), scanWorkers(SCAN));
         } finally {
             backend.setAlive(true);
         }
@@ -228,7 +228,7 @@ public class PreferReplicaLocationTest extends SchedulerTestBase {
         SimpleScheduler.addToBlocklist(BACKEND1_ID);
         try {
             connectContext.getSessionVariable().setPreferReplicaLocation("dc:a");
-            Assertions.assertEquals(ALL_BACKENDS, scanCandidates(SCAN));
+            Assertions.assertEquals(LOCATION_B, scanWorkers(SCAN));
         } finally {
             SimpleScheduler.getHostBlacklist().clear();
         }

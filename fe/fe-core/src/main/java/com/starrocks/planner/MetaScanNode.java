@@ -16,7 +16,6 @@ package com.starrocks.planner;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
 import com.starrocks.catalog.Column;
 import com.starrocks.common.Pair;
 import com.starrocks.catalog.LocalTablet;
@@ -95,7 +94,6 @@ public class MetaScanNode extends AbstractOlapTableScanNode {
         // Build tablet hint set for filtering
         Set<Long> hintTabletSet = hintsTabletIds.isEmpty() ?
                 Collections.emptySet() : new HashSet<>(hintsTabletIds);
-        Multimap<String, String> preferLocation = OlapScanNode.getPreferReplicaLocation();
 
         // Batch retrieve all tablets' location info in shared-data mode
         Map<Long, List<Long>> tabletLocationInfo = new HashMap<>();
@@ -168,10 +166,9 @@ public class MetaScanNode extends AbstractOlapTableScanNode {
                             "in tablet: " + tabletId, INTERNAL_ERROR);
                 }
 
-                List<Replica> replicas = OlapScanNode.preferReplicasInLocation(allQueryableReplicas, preferLocation);
-                Collections.shuffle(replicas);
+                Collections.shuffle(allQueryableReplicas);
                 boolean tabletIsNull = true;
-                for (Replica replica : replicas) {
+                for (Replica replica : allQueryableReplicas) {
                     ComputeNode node =
                             GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo()
                                     .getBackendOrComputeNode(replica.getBackendId());

@@ -33,6 +33,7 @@ import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.qe.QueryStatisticsItem;
 import com.starrocks.qe.SimpleScheduler;
 import com.starrocks.qe.scheduler.NonRecoverableException;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.qe.scheduler.SchedulerException;
 import com.starrocks.rpc.BackendServiceClient;
 import com.starrocks.rpc.RpcException;
@@ -101,6 +102,11 @@ public class ExecutionDAG {
     private final Map<Integer, TNetworkAddress> channelIdToBEHTTP = Maps.newHashMap();
     private final Map<Integer, TNetworkAddress> channelIdToBEPort = Maps.newHashMap();
 
+    /**
+     * The locations preferred by the session for the backends of this job, null when there is none.
+     */
+    private ReplicaLocationPreference replicaLocationPreference = null;
+
     private ExecutionDAG(JobSpec jobSpec) {
         this.jobSpec = jobSpec;
         this.fragments = Lists.newArrayList();
@@ -114,6 +120,14 @@ public class ExecutionDAG {
         executionDAG.attachFragments(jobSpec.getFragments());
 
         return executionDAG;
+    }
+
+    public ReplicaLocationPreference getReplicaLocationPreference() {
+        return replicaLocationPreference;
+    }
+
+    public void setReplicaLocationPreference(ReplicaLocationPreference replicaLocationPreference) {
+        this.replicaLocationPreference = replicaLocationPreference;
     }
 
     public void attachFragments(List<PlanFragment> planFragments) {
