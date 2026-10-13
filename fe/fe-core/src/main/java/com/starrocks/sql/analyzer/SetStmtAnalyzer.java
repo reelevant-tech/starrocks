@@ -27,7 +27,6 @@ import com.starrocks.common.ErrorReport;
 import com.starrocks.common.StarRocksException;
 import com.starrocks.common.util.CompressionUtils;
 import com.starrocks.common.util.ParseUtil;
-import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.ConnectorSinkShuffleMode;
 import com.starrocks.connector.PlanMode;
@@ -279,9 +278,9 @@ public class SetStmtAnalyzer {
 
         if (variable.equalsIgnoreCase(SessionVariable.PREFER_REPLICA_LOCATION)) {
             String location = resolvedExpression.getStringValue();
-            if (!location.isEmpty() && !location.matches(PropertyAnalyzer.MULTI_LOCATION_LABELS_REGEX)) {
+            if (!SessionVariable.isValidPreferReplicaLocation(location)) {
                 throw new SemanticException(String.format("Invalid prefer_replica_location: %s, " +
-                        "should be like 'key:value' or 'k1:v1,k2:v2'", location));
+                        "should be 'auto' or location tiers like 'key:value' or 'k1:v1,k2:v2; k3:v3'", location));
             }
         }
 

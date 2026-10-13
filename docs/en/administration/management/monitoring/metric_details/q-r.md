@@ -114,6 +114,21 @@ description: "Alphabetical q - r"
 - Unit: Count
 - Description: Number of tables currently held in the FE catalog recycle bin.
 
+## `replica_location_queries_first_tier`
+
+- Unit: Count
+- Description: Number of queries with `prefer_replica_location` set whose backends were picked in the nearest tier.
+
+## `replica_location_queries_later_tier`
+
+- Unit: Count
+- Description: Number of queries with `prefer_replica_location` set whose backends were picked in a later tier, because the nearest one lacked an available replica of some of their tablets.
+
+## `replica_location_queries_split`
+
+- Unit: Count
+- Description: Number of queries with `prefer_replica_location` set that read some tablets outside their tier, because no tier had an available replica of every tablet.
+
 ## `resource_group_bigquery_count`
 
 - Unit: Count

@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.starrocks.qe;
 
-import com.google.common.collect.Multimap;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.sql.analyzer.SemanticException;
@@ -130,23 +129,33 @@ public class SessionVariableTest {
         try {
             SessionVariable sessionVariable = new SessionVariable();
             Assertions.assertEquals("", sessionVariable.getPreferReplicaLocation());
-            Assertions.assertNull(sessionVariable.getPreferReplicaLocationMap());
+            Assertions.assertNull(sessionVariable.getPreferReplicaLocationTiers());
+            Assertions.assertFalse(sessionVariable.isPreferReplicaLocationAuto());
 
             Config.default_prefer_replica_location = "dc:dc1";
             Assertions.assertEquals("dc:dc1", sessionVariable.getPreferReplicaLocation());
-            Assertions.assertEquals(List.of("dc1"), List.copyOf(sessionVariable.getPreferReplicaLocationMap().get("dc")));
+            Assertions.assertEquals(List.of("dc:dc1"), sessionVariable.getPreferReplicaLocationTiers());
 
-            sessionVariable.setPreferReplicaLocation("dc:dc2, rack:r1");
-            Multimap<String, String> location = sessionVariable.getPreferReplicaLocationMap();
-            Assertions.assertEquals(List.of("dc2"), List.copyOf(location.get("dc")));
-            Assertions.assertEquals(List.of("r1"), List.copyOf(location.get("rack")));
+            sessionVariable.setPreferReplicaLocation(" dc:dc2, rack:r1 ; dc:dc3 ");
+            Assertions.assertEquals(List.of("dc:dc2, rack:r1", "dc:dc3"), sessionVariable.getPreferReplicaLocationTiers());
+
+            sessionVariable.setPreferReplicaLocation("AUTO");
+            Assertions.assertTrue(sessionVariable.isPreferReplicaLocationAuto());
+            Assertions.assertNull(sessionVariable.getPreferReplicaLocationTiers());
 
             sessionVariable.setPreferReplicaLocation("");
             Config.default_prefer_replica_location = "not a location";
-            Assertions.assertNull(sessionVariable.getPreferReplicaLocationMap());
+            Assertions.assertNull(sessionVariable.getPreferReplicaLocationTiers());
         } finally {
             Config.default_prefer_replica_location = defaultLocation;
         }
+
+        Assertions.assertTrue(SessionVariable.isValidPreferReplicaLocation(""));
+        Assertions.assertTrue(SessionVariable.isValidPreferReplicaLocation("auto"));
+        Assertions.assertTrue(SessionVariable.isValidPreferReplicaLocation("dc:dc1; dc:*"));
+        Assertions.assertFalse(SessionVariable.isValidPreferReplicaLocation("dc:dc1;"));
+        Assertions.assertFalse(SessionVariable.isValidPreferReplicaLocation("dc:dc1;;dc:dc2"));
+        Assertions.assertFalse(SessionVariable.isValidPreferReplicaLocation("dc"));
     }
 
     @Test

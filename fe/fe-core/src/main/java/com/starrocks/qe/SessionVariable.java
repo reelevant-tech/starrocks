@@ -40,7 +40,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -473,6 +472,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_QUERY_TABLET_AFFINITY = "enable_query_tablet_affinity";
     public static final String ENABLE_GATHER_FRAGMENT_LOCALITY_OPTIMIZATION = "enable_gather_fragment_locality_optimization";
     public static final String PREFER_REPLICA_LOCATION = "prefer_replica_location";
+    public static final String PREFER_REPLICA_LOCATION_AUTO = "auto";
 
     public static final String SKIP_LOCAL_DISK_CACHE = "skip_local_disk_cache";
 
@@ -1403,10 +1403,11 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableGatherFragmentLocalityOptimization = false;
 
     /**
-     * Location labels (same format as the table property labels.location, e.g. "dc:dc1") whose
-     * backends are preferred for scans and for the gather fragment. Replicas outside these locations
-     * are only read when a tablet has no queryable replica inside them. Empty means the Frontend
-     * config default_prefer_replica_location.
+     * Location tiers, nearest first and separated by ';', each in the format of the table property
+     * labels.location (e.g. "dc:dc1; dc:dc2"), or "auto" to order the backend locations by the round
+     * trip measured from this Frontend. A query reads its replicas, and runs its gather fragment, in
+     * the first tier that has an available replica of every tablet, and falls back tier by tier.
+     * Empty means the Frontend config default_prefer_replica_location.
      */
     @VariableMgr.VarAttr(name = PREFER_REPLICA_LOCATION)
     private String preferReplicaLocation = "";
@@ -4095,15 +4096,33 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     }
 
     /**
-     * @return the preferred locations as a key -> values map, or null when none is set or the value is malformed
+     * @return whether the value is empty, "auto", or location tiers separated by ';' in the format of labels.location
      */
-    public Multimap<String, String> getPreferReplicaLocationMap() {
-        String location = getPreferReplicaLocation();
-        if (Strings.isNullOrEmpty(location) ||
-                !location.matches(PropertyAnalyzer.MULTI_LOCATION_LABELS_REGEX)) {
+    public static boolean isValidPreferReplicaLocation(String value) {
+        if (value.isEmpty() || value.trim().equalsIgnoreCase(PREFER_REPLICA_LOCATION_AUTO)) {
+            return true;
+        }
+        for (String tier : value.split(";", -1)) {
+            if (!tier.matches(PropertyAnalyzer.MULTI_LOCATION_LABELS_REGEX)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean isPreferReplicaLocationAuto() {
+        return getPreferReplicaLocation().trim().equalsIgnoreCase(PREFER_REPLICA_LOCATION_AUTO);
+    }
+
+    /**
+     * @return the location tiers, nearest first, or null when none is set, when it is "auto" or when it is malformed
+     */
+    public List<String> getPreferReplicaLocationTiers() {
+        String value = getPreferReplicaLocation();
+        if (Strings.isNullOrEmpty(value) || isPreferReplicaLocationAuto() || !isValidPreferReplicaLocation(value)) {
             return null;
         }
-        return PropertyAnalyzer.analyzeLocationStringToMap(location);
+        return Arrays.stream(value.split(";")).map(String::trim).collect(Collectors.toList());
     }
 
     public boolean isSkipLocalDiskCache() {

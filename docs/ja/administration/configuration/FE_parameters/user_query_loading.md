@@ -281,7 +281,34 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - タイプ：String
 - 単位：-
 - 変更可能：Yes
-- 説明：セッションがセッション変数 `prefer_replica_location` を設定していない場合に、この FE が計画するクエリで使用されるデフォルト値です。形式はテーブルプロパティ `labels.location` と同じで、例えば `dc:dc1` のように指定します。各 FE に異なる値を設定すると、自分のデータセンターの FE に接続したクライアントは、そのデータセンター内のレプリカを読み取ります。空の値は、優先する Location がないことを意味します。
+- 説明：セッションがセッション変数 `prefer_replica_location` を設定していない場合に、この FE が計画するクエリで使用されるデフォルト値です。`auto` を指定すると、この FE が測定したネットワークの往復時間で最も近い Location から読み取ります。または、近い順の Location の階層を `;` で区切って指定します。各階層の形式はテーブルプロパティ `labels.location` と同じで、例えば `dc:dc1; dc:dc2` のように指定します。空の値は、優先する Location がないことを意味します。
+- 導入時期：v4.2
+
+### `backend_latency_probe_interval_ms`
+
+- デフォルト：5000
+- タイプ：Long
+- 単位：ミリ秒
+- 変更可能：Yes
+- 説明：この FE が各 BE への TCP 接続を開いてネットワークの往復時間を測定する間隔です。往復時間は `prefer_replica_location` = `auto` のときに BE の Location を並べるために使われ、メトリクス `backend_rtt_ms` として出力されます。
+- 導入時期：v4.2
+
+### `backend_latency_probe_timeout_ms`
+
+- デフォルト：1000
+- タイプ：Int
+- 単位：ミリ秒
+- 変更可能：Yes
+- 説明：1 つの BE への往復測定のタイムアウトです。この時間内に応答しない BE は、その測定では到達不能として扱われます。
+- 導入時期：v4.2
+
+### `backend_latency_probe_window`
+
+- デフォルト：24
+- タイプ：Int
+- 単位：-
+- 変更可能：Yes
+- 説明：BE ごとに保持する測定回数です。BE への往復時間はそれらの最小値とするため、一時的な遅延で Location の順序が変わることはありません。
 - 導入時期：v4.2
 
 ### `dynamic_partition_check_interval_seconds`
