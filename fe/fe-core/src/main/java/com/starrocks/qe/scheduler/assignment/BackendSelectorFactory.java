@@ -15,6 +15,7 @@
 package com.starrocks.qe.scheduler.assignment;
 
 import com.starrocks.common.StarRocksException;
+import com.starrocks.planner.MetaScanNode;
 import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.ScanNode;
 import com.starrocks.planner.SchemaScanNode;
@@ -28,6 +29,7 @@ import com.starrocks.qe.NoopBackendSelector;
 import com.starrocks.qe.NormalBackendSelector;
 import com.starrocks.qe.ReplicatedBackendSelector;
 import com.starrocks.qe.SessionVariable;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.qe.scheduler.WorkerProvider;
 import com.starrocks.qe.scheduler.dag.ExecutionFragment;
 import com.starrocks.thrift.TScanRangeLocations;
@@ -80,6 +82,10 @@ public class BackendSelectorFactory {
             boolean hasColocate = execFragment.isColocated();
             boolean hasBucket = execFragment.isLocalBucketShuffleJoin();
             boolean hasReplicated = execFragment.isReplicated();
+            // Only the scans of internal tables read replicas placed by location.
+            ReplicaLocationPreference preference = execFragment.getExecutionDAG() != null &&
+                    (scanNode instanceof OlapScanNode || scanNode instanceof MetaScanNode) ?
+                    execFragment.getExecutionDAG().getReplicaLocationPreference() : null;
             if (!assignment.isEmpty() && hasReplicated && scanNode.canDoReplicatedJoin()) {
                 destReplicatedScanIds.add(scanNode.getId().asInt());
                 return new ReplicatedBackendSelector(scanNode, locations, assignment,
@@ -90,9 +96,9 @@ public class BackendSelectorFactory {
                 boolean isRightOrFullBucketShuffleFragment = execFragment.isRightOrFullBucketShuffle();
                 return new ColocatedBackendSelector((OlapScanNode) scanNode, assignment,
                         colocatedAssignment, isRightOrFullBucketShuffleFragment, workerProvider,
-                        sessionVariable.getMaxBucketsPerBeToUseBalancerAssignment());
+                        sessionVariable.getMaxBucketsPerBeToUseBalancerAssignment(), preference);
             } else {
-                return new NormalBackendSelector(scanNode, locations, assignment, workerProvider, isLoadType);
+                return new NormalBackendSelector(scanNode, locations, assignment, workerProvider, isLoadType, preference);
             }
         }
     }

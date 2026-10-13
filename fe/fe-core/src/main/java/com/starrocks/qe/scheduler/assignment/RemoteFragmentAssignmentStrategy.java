@@ -15,15 +15,14 @@
 package com.starrocks.qe.scheduler.assignment;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import com.starrocks.clone.TabletChecker;
 import com.starrocks.common.Config;
 import com.starrocks.common.StarRocksException;
 import com.starrocks.planner.MultiCastPlanFragment;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariableConstants;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.qe.scheduler.WorkerProvider;
 import com.starrocks.qe.scheduler.dag.ExecutionDAG;
 import com.starrocks.qe.scheduler.dag.ExecutionFragment;
@@ -32,6 +31,7 @@ import com.starrocks.qe.scheduler.dag.FragmentInstance;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -121,27 +121,19 @@ public class RemoteFragmentAssignmentStrategy implements FragmentAssignmentStrat
      * or when no worker is in it, select the next worker.
      */
     private long selectGatherWorker(ExecutionFragment execFragment) throws StarRocksException {
-        Multimap<String, String> preferLocation = connectContext == null ? null :
-                connectContext.getSessionVariable().getPreferReplicaLocationMap();
-        if (preferLocation != null) {
-            List<Long> candidates = Lists.newArrayList();
+        ReplicaLocationPreference locationPreference = execFragment.getExecutionDAG() == null ? null :
+                execFragment.getExecutionDAG().getReplicaLocationPreference();
+        if (locationPreference != null) {
+            List<Long> childWorkerIds = Lists.newArrayList();
             for (int i = 0; i < execFragment.childrenSize(); i++) {
                 for (FragmentInstance childInstance : execFragment.getChild(i).getInstances()) {
-                    long childWorkerId = childInstance.getWorkerId();
-                    if (!candidates.contains(childWorkerId) && TabletChecker.isLocationMatch(childWorkerId, preferLocation)) {
-                        candidates.add(childWorkerId);
-                    }
+                    childWorkerIds.add(childInstance.getWorkerId());
                 }
             }
-            if (candidates.isEmpty()) {
-                candidates = workerProvider.getAllAvailableNodes().stream()
-                        .filter(id -> TabletChecker.isLocationMatch(id, preferLocation))
-                        .collect(Collectors.toList());
-            }
-            if (!candidates.isEmpty()) {
-                long workerId = candidates.get(random.nextInt(candidates.size()));
-                workerProvider.selectWorkerUnchecked(workerId);
-                return workerId;
+            OptionalLong workerId = locationPreference.pickWorker(childWorkerIds, workerProvider, random);
+            if (workerId.isPresent()) {
+                workerProvider.selectWorkerUnchecked(workerId.getAsLong());
+                return workerId.getAsLong();
             }
         }
         return workerProvider.selectNextWorker();

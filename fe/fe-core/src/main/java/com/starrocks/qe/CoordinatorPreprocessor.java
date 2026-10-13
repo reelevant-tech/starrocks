@@ -16,6 +16,7 @@ package com.starrocks.qe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.ResourceGroupClassifier;
 import com.starrocks.catalog.ResourceGroupMgr;
@@ -26,6 +27,8 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.lake.qe.scheduler.DefaultSharedDataWorkerProvider;
 import com.starrocks.planner.DataPartition;
 import com.starrocks.planner.DataSink;
+import com.starrocks.planner.MetaScanNode;
+import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.PlanFragmentId;
 import com.starrocks.planner.ResultSink;
@@ -34,6 +37,7 @@ import com.starrocks.planner.TableFunctionTableSink;
 import com.starrocks.qe.SessionVariableConstants.BlacklistBackupRoutingPolicy;
 import com.starrocks.qe.scheduler.DefaultWorkerProvider;
 import com.starrocks.qe.scheduler.LazyWorkerProvider;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.qe.scheduler.SkipBlacklistWorkerProvider;
 import com.starrocks.qe.scheduler.TFragmentInstanceFactory;
 import com.starrocks.qe.scheduler.WorkerProvider;
@@ -51,6 +55,7 @@ import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.TDescriptorTable;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TQueryGlobals;
+import com.starrocks.thrift.TScanRangeLocations;
 import com.starrocks.thrift.TUniqueId;
 import com.starrocks.thrift.TWorkGroup;
 import org.apache.commons.lang3.StringUtils;
@@ -92,6 +97,7 @@ public class CoordinatorPreprocessor {
         this.jobSpec = jobSpec;
         this.enablePhasedSchedule = enablePhasedSchedule;
         this.executionDAG = ExecutionDAG.build(jobSpec);
+        this.executionDAG.setReplicaLocationPreference(ReplicaLocationPreference.of(connectContext));
         workerProviderFactory = newWorkerProviderFactory();
         SessionVariable sessionVariable = connectContext.getSessionVariable();
         this.lazyWorkerProvider = LazyWorkerProvider.of(() -> workerProviderFactory.captureAvailableWorkers(
@@ -110,6 +116,7 @@ public class CoordinatorPreprocessor {
         this.jobSpec = JobSpec.Factory.mockJobSpec(connectContext, fragments, scanNodes);
         this.enablePhasedSchedule = false;
         this.executionDAG = ExecutionDAG.build(jobSpec);
+        this.executionDAG.setReplicaLocationPreference(ReplicaLocationPreference.of(connectContext));
         workerProviderFactory = newWorkerProviderFactory();
 
         SessionVariable sessionVariable = connectContext.getSessionVariable();
@@ -265,8 +272,30 @@ public class CoordinatorPreprocessor {
         return executionDAG.getFragment(fragmentId).getScanRangeAssignment();
     }
 
+    /**
+     * @return the scan ranges of the scans of internal tables, the only ones whose replicas are placed by location, with
+     * the rows that the optimizer expects each scan to return
+     */
+    private static List<ReplicaLocationPreference.Scan> internalScanRanges(List<ScanNode> scanNodes) {
+        List<ReplicaLocationPreference.Scan> scans = Lists.newArrayList();
+        for (ScanNode scanNode : scanNodes) {
+            if (scanNode instanceof OlapScanNode || scanNode instanceof MetaScanNode) {
+                List<TScanRangeLocations> locations = scanNode.getScanRangeLocations(0);
+                if (locations != null) {
+                    scans.add(new ReplicaLocationPreference.Scan(locations, scanNode.getCardinality()));
+                }
+            }
+        }
+        return scans;
+    }
+
     @VisibleForTesting
     void computeFragmentInstances() throws StarRocksException {
+        ReplicaLocationPreference locationPreference = executionDAG.getReplicaLocationPreference();
+        if (locationPreference != null) {
+            WorkerProvider workerProvider = lazyWorkerProvider.get();
+            locationPreference.prepare(internalScanRanges(jobSpec.getScanNodes()), workerProvider::isDataNodeAvailable);
+        }
         for (ExecutionFragment execFragment : executionDAG.getFragmentsInPostorder()) {
             fragmentAssignmentStrategyFactory.create(execFragment, lazyWorkerProvider.get()).assignFragmentToWorker(execFragment);
         }

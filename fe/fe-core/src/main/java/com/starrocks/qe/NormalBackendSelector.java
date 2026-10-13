@@ -19,6 +19,7 @@ import com.google.common.collect.Maps;
 import com.starrocks.common.Config;
 import com.starrocks.common.StarRocksException;
 import com.starrocks.planner.ScanNode;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.qe.scheduler.WorkerProvider;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TScanRangeLocation;
@@ -41,15 +42,23 @@ public class NormalBackendSelector implements BackendSelector {
 
     private final WorkerProvider workerProvider;
     private final boolean isLoad;
+    private final ReplicaLocationPreference locationPreference;
 
     public NormalBackendSelector(ScanNode scanNode, List<TScanRangeLocations> locations,
                                  FragmentScanRangeAssignment assignment, WorkerProvider workerProvider,
                                  boolean isLoad) {
+        this(scanNode, locations, assignment, workerProvider, isLoad, null);
+    }
+
+    public NormalBackendSelector(ScanNode scanNode, List<TScanRangeLocations> locations,
+                                 FragmentScanRangeAssignment assignment, WorkerProvider workerProvider,
+                                 boolean isLoad, ReplicaLocationPreference locationPreference) {
         this.scanNode = scanNode;
         this.locations = locations;
         this.assignment = assignment;
         this.workerProvider = workerProvider;
         this.isLoad = isLoad;
+        this.locationPreference = locationPreference;
     }
 
     private boolean isEnableScheduleByRowCnt(TScanRangeLocations scanRangeLocations) {
@@ -79,7 +88,9 @@ public class NormalBackendSelector implements BackendSelector {
             TScanRangeLocation minLocation = null;
 
             List<Long> unavailableDataNodeIds = new ArrayList<>();
-            for (final TScanRangeLocation location : scanRangeLocations.getLocations()) {
+            List<TScanRangeLocation> candidates = locationPreference == null ? scanRangeLocations.getLocations() :
+                    locationPreference.preferLocations(scanRangeLocations.getLocations(), workerProvider);
+            for (final TScanRangeLocation location : candidates) {
                 // Each location is corresponding to a replica of the tablet.
                 if (!workerProvider.isDataNodeAvailable(location.getBackend_id())) {
                     unavailableDataNodeIds.add(location.getBackend_id());

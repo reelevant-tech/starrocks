@@ -290,7 +290,43 @@ ADMIN SET FRONTEND CONFIG ("key" = "value");
 - 类型: String
 - 单位: -
 - 是否可变: Yes
-- 描述: 当会话未设置会话变量 `prefer_replica_location` 时，由该 FE 规划的查询所使用的默认值。格式与表属性 `labels.location` 相同，例如 `dc:dc1`。可以在每个 FE 上设置不同的值，使连接到其所在数据中心 FE 的客户端读取该数据中心内的副本。空值表示不优先选择任何 Location。
+- 描述: 当会话未设置会话变量 `prefer_replica_location` 时，由该 FE 规划的查询所使用的默认值：`auto` 表示按该 FE 测得的网络往返时间在最近的 Location 中读取；或者按由近到远排列、用 `;` 分隔的 Location 层级，每一层的格式与表属性 `labels.location` 相同，例如 `dc:dc1; dc:dc2`。空值表示不优先选择任何 Location。
+- 引入版本: v4.2
+
+### `backend_latency_probe_interval_ms`
+
+- 默认值: 5000
+- 类型: Long
+- 单位: 毫秒
+- 是否可变: Yes
+- 描述: 该 FE 通过建立 TCP 连接测量到每个 BE 的网络往返时间的频率。往返时间用于在 `prefer_replica_location` = `auto` 时对 BE 的 Location 排序，并以指标 `backend_rtt_ms` 导出。
+- 引入版本: v4.2
+
+### `backend_latency_probe_timeout_ms`
+
+- 默认值: 1000
+- 类型: Int
+- 单位: 毫秒
+- 是否可变: Yes
+- 描述: 对单个 BE 的一次往返探测的超时时间。超时未响应的 BE 在该次探测中视为不可达。
+- 引入版本: v4.2
+
+### `backend_latency_probe_window`
+
+- 默认值: 24
+- 类型: Int
+- 单位: -
+- 是否可变: Yes
+- 描述: 每个 BE 保留的探测次数。到某个 BE 的往返时间取这些探测中的最小值，以免短暂的抖动改变 Location 的顺序。
+- 引入版本: v4.2
+
+### `prefer_replica_location_split_max_rows`
+
+- 默认值: 1000000
+- 类型: Long
+- 单位: -
+- 是否可变: Yes
+- 描述: 使用 `prefer_replica_location` 时，查询在最近的 Location 内执行，并从后续 Location 读取在该 Location 内没有可用副本的 Tablet。当优化器预计扫描从这些 Tablet 返回的行数超过该值时，整个查询改为在最近的、对每个 Tablet 都有可用副本的 Location 内执行，以避免这些行跨 Location 传输。
 - 引入版本: v4.2
 
 ### `dynamic_partition_check_interval_seconds`

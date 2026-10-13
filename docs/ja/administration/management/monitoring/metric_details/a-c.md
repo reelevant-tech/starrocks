@@ -48,6 +48,11 @@ StarRocksクラスターの監視サービスを構築する方法の詳細に�
 - 単位: カウント
 - 説明: タブレットデルタライタースレッドプール内のキューに入れられたタスク数。
 
+## `backend_rtt_ms`
+
+- 単位: ミリ秒
+- 説明: この FE から BE へのネットワークの往復時間です。`backend_latency_probe_interval_ms` ごとに TCP 接続で測定し、直近 `backend_latency_probe_window` 回の測定の最小値を取ります。ラベル: `backend_id`、`host`。`prefer_replica_location` = `auto` のときに BE の Location を並べるために使われます。
+
 ## `base_compaction_task_byte_per_second`
 
 - 単位: バイト/秒

@@ -1455,7 +1455,7 @@ FROM test;
 
 ### prefer_replica_location
 
-* **描述**：存算一体集群中优先用于执行查询的 BE 所在的 Location，格式与表属性 `labels.location` 相同，例如 `dc:dc1` 或 `dc:dc1,dc:dc2`。对于每个 Tablet，只有位于 `labels.location` 匹配的 BE 上的副本会作为扫描候选，Gather Fragment 也会被调度到匹配的 BE 上。如果某个 Tablet 在这些 Location 中没有可查询的副本，则从其他副本读取。当集群的 BE 分布在多个数据中心且每个数据中心都持有一份副本时，该变量可以让查询保持在同一个数据中心内。仅当 `choose_execute_instances_mode` 为 `LOCALITY`（默认值）且 `prefer_compute_node` 为 `false`（默认值）时，中间 Fragment 才会跟随扫描所在的 BE。空值表示使用规划该查询的 FE 的配置项 `default_prefer_replica_location` 的值。
+* **描述**：存算一体集群中优先用于执行查询的 BE 所在的 Location，按由近到远的层级排列，用 `;` 分隔，每一层的格式与表属性 `labels.location` 相同，例如 `dc:dc1; dc:dc2` 或 `dc:dc1,dc:dc2`。`auto` 表示按 FE 测得的到各 BE 的网络往返时间对 BE 的 Location 排序（参见 FE 配置项 `backend_latency_probe_interval_ms`）。查询在最近的、对其扫描的至少一个 Tablet 有可用副本的层级内执行：其扫描读取该层级内的副本，Gather Fragment 也在该层级的 BE 上执行。某个 Tablet 在该层级内没有可用副本时，按顺序从后续层级读取，最后才从任意 BE 读取。如果预计扫描从这些 Tablet 返回的行数超过 FE 配置项 `prefer_replica_location_split_max_rows`，且存在对每个 Tablet 都有可用副本的层级，则整个查询改为在最近的这样的层级内执行。当集群的 BE 分布在多个数据中心且每个数据中心都持有一份副本时，该变量可以让查询保持在同一个数据中心内。仅当 `choose_execute_instances_mode` 为 `LOCALITY`（默认值）且 `prefer_compute_node` 为 `false`（默认值）时，中间 Fragment 才会跟随扫描所在的 BE。空值表示使用规划该查询的 FE 的配置项 `default_prefer_replica_location` 的值。
 * **默认值**：空字符串
 * **数据类型**：String
 * **引入版本**：v4.2

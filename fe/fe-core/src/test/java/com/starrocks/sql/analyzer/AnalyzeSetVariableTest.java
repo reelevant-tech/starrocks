@@ -380,11 +380,14 @@ public class AnalyzeSetVariableTest {
     public void testPreferReplicaLocation() {
         analyzeSuccess("SET prefer_replica_location = 'dc:dc1'");
         analyzeSuccess("SET prefer_replica_location = 'dc:dc1, dc:dc2'");
+        analyzeSuccess("SET prefer_replica_location = 'dc:dc1; dc:dc2'");
         analyzeSuccess("SET prefer_replica_location = 'dc:*'");
+        analyzeSuccess("SET prefer_replica_location = 'auto'");
         analyzeSuccess("SET prefer_replica_location = ''");
 
         analyzeFail("SET prefer_replica_location = 'dc'", "Invalid prefer_replica_location: dc");
-        analyzeFail("SET prefer_replica_location = 'dc:dc1;dc:dc2'", "Invalid prefer_replica_location");
+        analyzeFail("SET prefer_replica_location = 'dc:dc1;'", "Invalid prefer_replica_location");
+        analyzeFail("SET prefer_replica_location = 'dc:dc1;;dc:dc2'", "Invalid prefer_replica_location");
     }
 
     @Test

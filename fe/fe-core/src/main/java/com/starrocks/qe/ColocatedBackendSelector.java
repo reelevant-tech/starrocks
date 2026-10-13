@@ -23,6 +23,7 @@ import com.starrocks.connector.BucketProperty;
 import com.starrocks.planner.AbstractOlapTableScanNode;
 import com.starrocks.planner.PlanNodeId;
 import com.starrocks.planner.ScanNode;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.qe.scheduler.WorkerProvider;
 import com.starrocks.thrift.TScanRangeLocation;
 import com.starrocks.thrift.TScanRangeLocations;
@@ -54,17 +55,28 @@ public class ColocatedBackendSelector implements BackendSelector {
     private final boolean isRightOrFullBucketShuffleFragment;
     private final WorkerProvider workerProvider;
     private final BucketSequenceIterator bucketSequenceIterator;
+    private final ReplicaLocationPreference locationPreference;
 
     public ColocatedBackendSelector(AbstractOlapTableScanNode scanNode, FragmentScanRangeAssignment assignment,
                                     ColocatedBackendSelector.Assignment colocatedAssignment,
                                     boolean isRightOrFullBucketShuffleFragment, WorkerProvider workerProvider,
                                     int maxBucketsPerBeToUseBalancerAssignment) {
+        this(scanNode, assignment, colocatedAssignment, isRightOrFullBucketShuffleFragment, workerProvider,
+                maxBucketsPerBeToUseBalancerAssignment, null);
+    }
+
+    public ColocatedBackendSelector(AbstractOlapTableScanNode scanNode, FragmentScanRangeAssignment assignment,
+                                    ColocatedBackendSelector.Assignment colocatedAssignment,
+                                    boolean isRightOrFullBucketShuffleFragment, WorkerProvider workerProvider,
+                                    int maxBucketsPerBeToUseBalancerAssignment,
+                                    ReplicaLocationPreference locationPreference) {
         this.scanNode = scanNode;
         this.assignment = assignment;
         this.colocatedAssignment = colocatedAssignment;
         this.isRightOrFullBucketShuffleFragment = isRightOrFullBucketShuffleFragment;
         this.workerProvider = workerProvider;
         this.bucketSequenceIterator = createBucketIterator(scanNode, maxBucketsPerBeToUseBalancerAssignment);
+        this.locationPreference = locationPreference;
     }
 
     @Override
@@ -126,7 +138,9 @@ public class ColocatedBackendSelector implements BackendSelector {
         int minBucketNum = Integer.MAX_VALUE;
         long minBackendId = Long.MAX_VALUE;
         List<Long> unavailableDataNodeIds = new ArrayList<>();
-        for (TScanRangeLocation location : seqLocation.locations) {
+        List<TScanRangeLocation> candidates = locationPreference == null ? seqLocation.locations :
+                locationPreference.preferLocations(seqLocation.locations, workerProvider);
+        for (TScanRangeLocation location : candidates) {
             if (!workerProvider.isDataNodeAvailable(location.getBackend_id())) {
                 unavailableDataNodeIds.add(location.getBackend_id());
                 continue;

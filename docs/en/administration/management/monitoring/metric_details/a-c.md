@@ -48,6 +48,11 @@ For more information on how to build a monitoring service for your StarRocks clu
 - Unit: Count
 - Description: Queued task count in the tablet delta writer thread pool.
 
+## `backend_rtt_ms`
+
+- Unit: ms
+- Description: Network round trip from this FE to a BE, measured by a TCP connection every `backend_latency_probe_interval_ms`; the minimum over the last `backend_latency_probe_window` probes. Labels: `backend_id`, `host`. Orders the BE locations for `prefer_replica_location` = `auto`.
+
 ## `base_compaction_task_byte_per_second`
 
 - Unit: Bytes/s
