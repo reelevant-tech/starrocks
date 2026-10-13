@@ -34,6 +34,7 @@ import com.starrocks.planner.TableFunctionTableSink;
 import com.starrocks.qe.SessionVariableConstants.BlacklistBackupRoutingPolicy;
 import com.starrocks.qe.scheduler.DefaultWorkerProvider;
 import com.starrocks.qe.scheduler.LazyWorkerProvider;
+import com.starrocks.qe.scheduler.ReplicaLocationPreference;
 import com.starrocks.qe.scheduler.SkipBlacklistWorkerProvider;
 import com.starrocks.qe.scheduler.TFragmentInstanceFactory;
 import com.starrocks.qe.scheduler.WorkerProvider;
@@ -92,6 +93,7 @@ public class CoordinatorPreprocessor {
         this.jobSpec = jobSpec;
         this.enablePhasedSchedule = enablePhasedSchedule;
         this.executionDAG = ExecutionDAG.build(jobSpec);
+        this.executionDAG.setReplicaLocationPreference(ReplicaLocationPreference.of(connectContext));
         workerProviderFactory = newWorkerProviderFactory();
         SessionVariable sessionVariable = connectContext.getSessionVariable();
         this.lazyWorkerProvider = LazyWorkerProvider.of(() -> workerProviderFactory.captureAvailableWorkers(
@@ -110,6 +112,7 @@ public class CoordinatorPreprocessor {
         this.jobSpec = JobSpec.Factory.mockJobSpec(connectContext, fragments, scanNodes);
         this.enablePhasedSchedule = false;
         this.executionDAG = ExecutionDAG.build(jobSpec);
+        this.executionDAG.setReplicaLocationPreference(ReplicaLocationPreference.of(connectContext));
         workerProviderFactory = newWorkerProviderFactory();
 
         SessionVariable sessionVariable = connectContext.getSessionVariable();
